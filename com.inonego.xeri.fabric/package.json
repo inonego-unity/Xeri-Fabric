@@ -1,0 +1,14 @@
+﻿{
+  "name": "com.inonego.xeri.fabric",
+  "version": "0.0.1",
+  "displayName": "Xeri Fabric",
+  "description": "Staging package for Xeri IO, data, localization, persistence, and workspace systems.",
+  "unity": "6000.0",
+  "author": {
+    "name": "inonego"
+  },
+  "dependencies": {
+    "com.inonego.xeri": "0.0.1",
+    "com.unity.addressables": "2.8.0"
+  }
+}
