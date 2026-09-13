@@ -1,0 +1,19 @@
+﻿{
+    "name": "inonego.Xeri.Fabric.TEST.PLAY",
+    "references": [
+        "inonego.Xeri",
+        "inonego.Xeri.Fabric",
+        "Unity.Addressables",
+        "Unity.ResourceManager"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false,
+    "optionalUnityReferences": ["TestAssemblies"]
+}

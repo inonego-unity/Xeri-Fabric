@@ -1,0 +1,18 @@
+- name: Xeri Fabric 문서
+  href: index.md
+- name: Data
+  items:
+  - name: DataPackage
+    href: modules/data/data-package.md
+  - name: DataPackage 구성하기
+    href: guides/data/build-data-package.md
+- name: Localization
+  items:
+  - name: Localization
+    href: modules/localization/localization.md
+  - name: Locale 정책 연결하기
+    href: guides/localization/project-locale-policy.md
+- name: 유지보수
+  items:
+  - name: IO 유지보수 지침
+    href: maintainers/io.md
