@@ -1,5 +1,17 @@
-- name: Xeri Fabric 문서
+- name: Xeri Fabric
   href: index.md
+- name: Getting Started
+  items:
+  - name: 설치
+    href: getting-started/installation.md
+- name: 개념
+  items:
+  - name: 구조와 의존 방향
+    href: concepts/architecture.md
+- name: IO
+  items:
+  - name: IO
+    href: modules/io/io.md
 - name: Data
   items:
   - name: DataPackage
@@ -12,7 +24,17 @@
     href: modules/localization/localization.md
   - name: Locale 정책 연결하기
     href: guides/localization/project-locale-policy.md
+- name: Workspace
+  items:
+  - name: Workspace
+    href: modules/workspace/workspace.md
+  - name: Document Workspace 구성하기
+    href: guides/workspace/build-document-workspace.md
 - name: 유지보수
   items:
   - name: IO 유지보수 지침
     href: maintainers/io.md
+  - name: Workspace 유지보수 지침
+    href: maintainers/workspace.md
+  - name: Workspace Document 유지보수 지침
+    href: maintainers/workspace-document.md
