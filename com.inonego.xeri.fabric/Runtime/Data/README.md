@@ -43,4 +43,4 @@ Data 모듈은 데이터 모델과 table 계약을 제공합니다. 파일에서
 
 - [DataPackage](../../Documentation~/modules/data/data-package.md)
 - [IO](../IO/README.md)
-- [Serializable](../Serializable/README.md)
+- [Xeri Serializer](https://inonego-unity.github.io/Xeri/docs/modules/serialization/serializer.html)

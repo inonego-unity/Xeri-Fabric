@@ -243,5 +243,5 @@ IO는 `domain object`가 무엇인지, 문자열이 JSON인지 XML인지 알지 
 
 ## 관련 문서
 
-- [소유권과 수명](../../Documentation~/concepts/ownership-and-lifetime.md)
+- [Xeri 소유권과 수명](https://inonego-unity.github.io/Xeri/docs/concepts/ownership-and-lifetime.html)
 - [IO 유지보수 지침](../../Documentation~/maintainers/io.md)

@@ -13,6 +13,10 @@ UserSettings/
 *.sln
 *.slnx
 
+# Documentation build
+/.docfx/
+/_site/
+
 # OS
 .DS_Store
 Thumbs.db

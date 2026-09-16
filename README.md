@@ -26,7 +26,9 @@
 
 ## Documentation
 
-- [사용자 문서](com.inonego.xeri.fabric/Documentation~/index.md)
+- **Documentation Site** — https://inonego-unity.github.io/Xeri-Fabric/
+- **API Reference** — https://inonego-unity.github.io/Xeri-Fabric/api/index.html
+- [Manual source](com.inonego.xeri.fabric/Documentation~/index.md)
 - [설치](com.inonego.xeri.fabric/Documentation~/getting-started/installation.md)
 - [구조와 의존 방향](com.inonego.xeri.fabric/Documentation~/concepts/architecture.md)
 

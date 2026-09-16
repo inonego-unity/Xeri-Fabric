@@ -1,0 +1,59 @@
+{
+  "metadata": [
+    {
+      "src": [
+        {
+          "src": ".",
+          "files": [".docfx/metadata-project/*.csproj"]
+        }
+      ],
+      "dest": ".docfx/api",
+      "noRestore": true,
+      "disableGitFeatures": true,
+      "includePrivateMembers": false,
+      "memberLayout": "samePage",
+      "namespaceLayout": "flattened"
+    }
+  ],
+  "build": {
+    "content": [
+      {
+        "files": ["index.md", "toc.yml"]
+      },
+      {
+        "src": "com.inonego.xeri.fabric/Documentation~",
+        "files": ["**/*.md", "toc.yml", "**/toc.yml"],
+        "dest": "docs"
+      },
+      {
+        "src": "com.inonego.xeri.fabric/Runtime",
+        "files": ["**/README.md"],
+        "dest": "runtime"
+      },      {
+        "src": "DocsSite/api-bridge",
+        "files": ["*.md"],
+        "dest": "api"
+      },
+      {
+        "src": ".docfx/api",
+        "files": ["toc.yml", "**/*.yml"],
+        "dest": "api"
+      }
+    ],
+    "resource": [
+      {
+        "src": "com.inonego.xeri.fabric/Documentation~",
+        "files": ["**/*.{png,jpg,jpeg,gif,svg,webp}"],
+        "dest": "docs"
+      }
+    ],
+    "output": "_site",
+    "template": ["default", "modern"],
+    "globalMetadata": {
+      "_appName": "Xeri Fabric",
+      "_appTitle": "Xeri Fabric Documentation",
+      "_enableSearch": true,
+      "_disableContribution": true
+    }
+  }
+}

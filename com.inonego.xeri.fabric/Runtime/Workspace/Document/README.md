@@ -334,7 +334,7 @@ handler가 지원하는 location을 IO location으로 mapping할 수 있으면 �
 
 ## 관련 문서
 
-- [Document Workspace 구성하기](../../Documentation~/guides/build-document-workspace.md)
-- [Workspace](../../README.md)
-- [Xeri IO](https://github.com/inonego-unity/Xeri/blob/main/com.inonego.xeri/Runtime/IO/README.md)
-- [Workspace Document 유지보수 지침](../../Documentation~/maintainers/workspace-document.md)
+- [Document Workspace 구성하기](../../../Documentation~/guides/workspace/build-document-workspace.md)
+- [Workspace](../../../Documentation~/modules/workspace/workspace.md)
+- [Xeri Fabric IO](../../IO/README.md)
+- [Workspace Document 유지보수 지침](../../../Documentation~/maintainers/workspace-document.md)
