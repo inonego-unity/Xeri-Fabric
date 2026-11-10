@@ -1,6 +1,6 @@
 /* BLOCK_HEADER_BEGIN =======================================================================
 파일명 : MemoryLocation.cs
-수정일 : 2026-06-21
+수정일 : 2026-11-09
 
 # 설명
 메모리 안의 값을 IO location처럼 다루기 위한 범용 location 컨테이너를 정의한다.
@@ -11,52 +11,55 @@ using System;
 
 namespace inonego.Xeri.IO
 {
-   // ============================================================
-   /// <summary>
-   /// 메모리 값을 IO location처럼 다루기 위한 범용 컨테이너.
-   /// </summary>
-   // ============================================================
-   [Serializable]
-   public sealed class MemoryLocation<TValue>
-   {
+    // ============================================================
+    /// <summary>
+    /// 메모리 값을 IO location처럼 다루기 위한 범용 컨테이너.
+    /// </summary>
+    // ============================================================
+    [Serializable]
+    public sealed class MemoryLocation<TValue>
+    {
 
-   #region 필드
+    #region 필드
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 현재 메모리 location이 보관하는 값.
-      /// </summary>
-      // ------------------------------------------------------------
-      public TValue Value
-      {
-         get => value;
-         set => this.value = value;
-      }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 현재 메모리 location이 보관하는 값.
+        /// </summary>
+        // ------------------------------------------------------------
+        public TValue Value
+        {
+            get => value;
+            set => this.value = value;
+        }
 
-      private TValue value = default;
+        private TValue value = default;
 
-   #endregion
+    #endregion
 
-   #region 생성자
+    #region 생성자
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 기본값을 보관하는 MemoryLocation을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public MemoryLocation() : base() {}
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 기본값을 보관하는 MemoryLocation을 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public MemoryLocation()
+        {
+            // NONE
+        }
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 지정한 초기값을 보관하는 MemoryLocation을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public MemoryLocation(TValue value) : this()
-      {
-         this.value = value;
-      }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 지정한 초기값을 보관하는 MemoryLocation을 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public MemoryLocation(TValue value) : this()
+        {
+            this.value = value;
+        }
 
-   #endregion
+    #endregion
 
-   }
+    }
 }

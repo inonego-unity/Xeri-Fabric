@@ -8,7 +8,7 @@
 
 ## 왜 필요한가
 
-상위 시스템이 `File.ReadAllText`, `Resources.Load`, Addressables handle을 직접 섞어 쓰면 저장 위치가 바뀔 때 도메인 코드와 수명 처리까지 함께 바뀝니다. Xeri IO는 **어디서 읽는가**와 **무엇을 읽는가**를 `TLocation`/`TValue` 계약으로 분리하고, 외부 자원 수명이 있으면 `Lease`로 함께 전달합니다.
+상위 시스템이 `File.ReadAllText`, `Resources.Load`, Addressables handle을 직접 섞어 쓰면 저장 위치가 바뀔 때 도메인 코드와 수명 처리까지 함께 바뀝니다. Xeri IO는 **어디서 읽는가**와 **무엇을 읽는가**를 `TLocation`/`TValue` 계약으로 분리하고, 외부 자원 수명이 있으면 `ReleaseHandle`로 함께 전달합니다.
 
 ## 언제 사용하는가
 
@@ -37,9 +37,9 @@ JSON/XML/YAML 같은 포맷 변환은 serializer가 맡고, IO는 이미 정해�
 | `IDataWriter<TLocation, TValue>` | location에 value를 쓰는 동기 계약 |
 | `IAsyncDataReader<TLocation, TValue>` | 비동기로 value를 읽는 계약 |
 | `IAsyncDataWriter<TLocation, TValue>` | 비동기로 value를 쓰는 계약 |
-| `ReadResponse<TValue>` | read 성공/실패, value, optional `Lease`를 담는 응답 |
+| `ReadResponse<TValue>` | read 성공/실패, value, optional `ReleaseHandle`를 담는 응답 |
 | `WriteResponse` | write 성공/실패를 담는 응답 |
-| `Lease` | 읽은 value의 수명을 유지하기 위해 함께 전달하는 일회 종료 책임 |
+| `ReleaseHandle` | 읽은 value의 수명을 유지하기 위해 함께 전달하는 일회 종료 책임 |
 
 ## 제공 구현
 
@@ -49,16 +49,21 @@ Runtime/IO/
 ├── IDataWriter.cs
 ├── Response/
 │   ├── ReadResponse.cs
+│   ├── IReleaseHandle.cs
+│   ├── CallbackReleaseHandle.cs
 │   └── WriteResponse.cs
 ├── File/
 │   ├── TextFileIO.cs
+│   ├── FileCommitWriter.cs
 │   └── BinaryFileIO.cs
 ├── Memory/
 │   ├── MemoryLocation.cs
 │   └── MemoryIO.cs
 ├── Mapping/
 │   ├── MappedDataReader.cs
-│   └── AsyncMappedDataReader.cs
+│   ├── AsyncMappedDataReader.cs
+│   ├── MappedDataWriter.cs
+│   └── AsyncMappedDataWriter.cs
 └── Unity/
     ├── ResourcesAssetReader.cs
     └── AddressablesAssetReader.cs
@@ -71,7 +76,7 @@ Runtime/IO/
 | `MemoryLocation<T>` | location container | 메모리 안의 값을 IO location처럼 전달 |
 | `MemoryIO<T>` | `IDataReader<MemoryLocation<T>, T>`, `IDataWriter<MemoryLocation<T>, T>` | 테스트, 임시 저장, 런타임 memory 저장 |
 | `ResourcesAssetReader<TAsset>` | `IDataReader<string, TAsset>` | Unity Resources에서 asset 읽기 |
-| `AddressablesAssetReader<TAsset>` | sync/async reader | Addressables에서 asset을 읽고 release Lease를 response로 전달 |
+| `AddressablesAssetReader<TAsset>` | sync/async reader | Addressables에서 asset을 읽고 release ReleaseHandle를 response로 전달 |
 | `MappedDataReader` 계열 | reader adapter | 원본 reader의 response value를 필요한 타입으로 변환 |
 
 ## 기본 사용
@@ -97,7 +102,7 @@ if (!read.Success)
 var text = read.Value;
 ```
 
-파일 IO는 외부 수명이 없으므로 `read.Lease`는 `null`입니다.
+파일 IO는 외부 수명이 없으므로 `read.ReleaseHandle`는 `null`입니다.
 
 ### 메모리 IO
 
@@ -152,16 +157,16 @@ var read = await reader.ReadAsync("config/sample");
 
 if (!read.Success)
 {
-   read.Lease?.Dispose();
+   read.ReleaseHandle?.Dispose();
    return;
 }
 
 var asset = read.Value;
-var lease = read.Lease;
+var handle = read.ReleaseHandle;
 ```
 
 Addressables는 asset을 읽은 뒤 operation handle release가 필요합니다.
-`AddressablesAssetReader<TAsset>`는 raw asset을 `Value`로 반환하고, release 책임은 `Lease`로 함께 전달합니다.
+`AddressablesAssetReader<TAsset>`는 raw asset을 `Value`로 반환하고, release 책임은 `ReleaseHandle`로 함께 전달합니다.
 
 단기 사용이면 사용이 끝난 뒤 직접 release합니다.
 
@@ -172,32 +177,41 @@ try
 }
 finally
 {
-   read.Lease?.Dispose();
+   read.ReleaseHandle?.Dispose();
 }
 ```
 
-장기 보관이면 `Value`를 보관하는 session/model/cache가 `Lease`도 함께 보관하고, 자신이 닫힐 때 Dispose합니다.
+장기 보관이면 `Value`를 보관하는 session/model/cache가 `ReleaseHandle`도 함께 보관하고, 자신이 닫힐 때 Dispose합니다.
 
-`Lease`는 `Success`와 독립적인 수명 책임입니다.
-실패 응답이라도 Lease가 있으면 호출자가 즉시 Dispose하거나, 값을 소유할 객체가 함께 보관해야 합니다.
+`ReleaseHandle`는 `Success`와 독립적인 수명 책임입니다.
+실패 응답이라도 ReleaseHandle가 있으면 호출자가 즉시 Dispose하거나, 값을 소유할 객체가 함께 보관해야 합니다.
 
-## Mapping과 Lease
+## Mapping과 ReleaseHandle
 
 `MappedDataReader`는 source response의 `Value`만 변환합니다.
-source response에 `Lease`가 있으면 mapped response에도 같은 Lease를 유지합니다.
+source response에 `ReleaseHandle`가 있으면 mapped response에도 같은 ReleaseHandle를 유지합니다.
 
 ```text
 ReadResponse<TSource>
 -> map(source.Value)
 -> ReadResponse<TValue>
    - Value = mapped value
-   - Lease = source.Lease
+   - ReleaseHandle = source.ReleaseHandle
 ```
 
-따라서 `TextAsset.GetData<T>()`, `Texture2D.GetRawTextureData<T>()`처럼 asset 내부 buffer view를 반환하는 mapping도 Lease가 끊기지 않습니다.
+따라서 `TextAsset.GetData<T>()`, `Texture2D.GetRawTextureData<T>()`처럼 asset 내부 buffer view를 반환하는 mapping도 ReleaseHandle가 끊기지 않습니다.
 
-독립 값으로 확실히 복사한 경우에도 기본 mapper는 Lease를 유지합니다.
+독립 값으로 확실히 복사한 경우에도 기본 mapper는 ReleaseHandle를 유지합니다.
 조기 release 최적화는 기본 계약에 넣지 않습니다.
+
+## 실패·취소 및 파일 백업 계약
+
+- `MappedDataReader`/`AsyncMappedDataReader`는 원본 Reader 또는 변환 함수에서 예외가 발생하면 `ReadResponse.Fail`로 반환한다. 다른 Reader의 모든 구현이 예외를 던지지 않는다는 약속은 아니므로, 직접 구현한 Reader도 실패 응답 계약을 지켜야 한다.
+- 비동기 Mapping Reader는 시작 전에 취소되면 source를 호출하지 않는다. source 응답 직후 또는 변환 도중 취소되면 `OperationCanceledException`을 담은 **실패 응답**을 반환하며, 받았던 `ReleaseHandle`을 직접 해제한다. 원본 실패와 취소·ReleaseHandle 해제 실패가 겹치면 `AggregateException`으로 원인들을 보존한다.
+- Source `ReadAsync`가 요청 토큰이 취소된 상태에서 **응답 대신 예외를 직접 던져도** 원본 예외와 요청 취소 원인을 함께 보존한다. 원인 트리에 **같은 요청 토큰**의 취소가 이미 포함돼 있으면 중복 추가하지 않고, **다른 토큰**의 취소는 별개의 원인으로 유지한다. 응답을 반환하지 않은 원본 Reader의 ReleaseHandle 정리는 해당 Reader가 책임진다.
+- 취소되지 않은 정상 응답 및 변환 실패 응답의 ReleaseHandle은 **호출자에게 전달**된다. 호출자는 성공 여부와 무관하게 ReleaseHandle을 `Dispose`해야 한다. 예외를 던지며 응답 자체를 만들지 못한 원본 Reader의 자원은 해당 Reader의 책임이다.
+- `AddressablesAssetReader.ReadAsync`는 사전 취소 시 로드를 시작하지 않는다. 로드와 취소의 대기가 완료되면 임시 취소 등록을 정리한다. 실제 로드가 취소·실패한 때는 Addressables handle을 회수한다.
+- `FileCommitWriter(preservePrevious: true)`는 대상 파일이 존재하는 교체에 성공할 때만 직전 내용을 `.bak`로 갱신한다. 대상이 없고 기존 `.bak`가 남아 있으면 **이를 자동 삭제하지 않고** 새 대상 파일만 만든다. 복구 파일의 유효성·세대 연결 판단은 상위 저장 도메인의 책임이다. 다중 파일 원자성, 전원 손실 내구성, 여러 Writer 사이의 잠금은 보장하지 않는다.
 
 ## 상위 시스템과 조합
 
@@ -237,7 +251,7 @@ IO는 `domain object`가 무엇인지, 문자열이 JSON인지 XML인지 알지 
 - serializer 포맷을 IO 타입 이름에 섞지 않습니다. 예: `JsonFileIO`보다 `TextFileIO` + `ISerializer` 조합을 우선합니다.
 - location 타입은 "어디서 읽는가"를 표현하고, value 타입은 "무엇을 읽는가"를 표현합니다.
 - reader와 writer는 필요할 때만 둘 다 구현합니다. 읽기 전용 입력원은 reader만 둡니다.
-- Addressables처럼 release가 필요한 입력원은 `ReadResponse<TValue>.Lease`로 수명 책임을 전달합니다.
+- Addressables처럼 release가 필요한 입력원은 `ReadResponse<TValue>.ReleaseHandle`로 수명 책임을 전달합니다.
 - 변환이 목적이면 새 reader를 만들기 전에 `MappedDataReader` 또는 `AsyncMappedDataReader` 조합을 검토합니다.
 - async가 실제 입력원 계약이면 `IAsyncDataReader`/`IAsyncDataWriter`를 함께 구현합니다. sync 구현이 자연스럽지 않으면 억지로 sync를 만들지 않습니다.
 
