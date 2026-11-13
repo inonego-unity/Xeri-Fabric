@@ -1,11 +1,12 @@
 /* BLOCK_HEADER_BEGIN =======================================================================
 파일명 : DataPackage.cs
-수정일 : 2026-08-28
+수정일 : 2026-11-13
 
 # 설명
 데이터 패키지 중앙 관리자.
 InstanceRegistry<DataPackage>를 통한 슬롯·Scope 시스템으로 여러 DataPackage를 이름별로 관리한다.
-Source별 원본 Table을 보존하고 ValueType별 Lookup으로 여러 Source를 하나의 logical Table처럼 조회한다.
+Source별 등록 시점의 Key·Row 매핑과 등록 수명·교체 세대·재로드 상태를 보관한다.
+Type별 Value/Source 조회 Dictionary는 별도 TypeLookup으로 관리한다.
 
 # 슬롯 시스템
 - Register(pkg)           : DEFAULT_SLOT에 등록
@@ -18,11 +19,13 @@ Source별 원본 Table을 보존하고 ValueType별 Lookup으로 여러 Source�
 - CloseScope()            : 가장 최근에 열린 스코프를 닫고 이전 슬롯으로 복원
 
 # Source 구성
-- AddSource               : Source와 Source-owned Table을 등록하고 Lookup에 반영
+- AddSource               : Source의 Key→Row 매핑을 확정해 Lookup에 반영
 - RemoveSource            : Source 제거 후 영향받은 runtime Lookup 재구성
 - ReplaceSource           : 기존 Source를 검증 후 교체
 - HasSource               : Source 등록 여부 조회
-- Source 등록 이후 Table/row는 runtime read-only로 취급
+- TryFindSource<T>        : Type/Key로 Row를 등록한 Source 조회 (direct Table 제외)
+- Source 등록·교체 시 Table의 Key→Row 매핑을 확정하며 이후 원본 Table 구조 변경은 반영하지 않는다.
+- Row 객체는 참조를 유지하며 객체 자체의 불변성은 ITableValue 구현 계약을 따른다.
 
 # 이벤트
 - OnChange: Register / Unregister / Clear 시 발생. Scope 전환 시에는 발생하지 않는다.
@@ -31,12 +34,17 @@ Source별 원본 Table을 보존하고 ValueType별 Lookup으로 여러 Source�
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading;
 
 using UnityEngine;
 
 namespace inonego.Xeri.Data
 {
+    using inonego;
+    using inonego.Xeri;
     using inonego.Xeri.Serializable;
+
+    using RowMap = IReadOnlyDictionary<string, ITableValue>;
 
     // ============================================================
     /// <summary>
@@ -82,19 +90,20 @@ namespace inonego.Xeri.Data
         /// </summary>
         // ------------------------------------------------------------
         public IReadOnlyTable Table(Type valueType);
+
     }
 
     // ================================================================================
     /// <summary>
     /// <br/> 데이터 패키지. 슬롯 기반으로 여러 인스턴스를 관리한다.
-    /// <br/> Source별 원본 Table을 보존하고 ValueType별 Lookup으로 논리 조회를 제공한다.
+    /// <br/> Source별 등록 Row 매핑을 보관하고 Type별 Lookup으로 논리 조회를 제공한다.
     /// </summary>
     // ================================================================================
     [Serializable]
     public class DataPackage : IReadOnlyDataPackage
     {
 
-    #region 내부 타입
+    #region Source 식별 및 상태 모델
 
         // ============================================================
         /// <summary>
@@ -219,9 +228,124 @@ namespace inonego.Xeri.Data
             public static bool operator !=(Source left, Source right) => !left.Equals(right);
         }
 
+        // ======================================================================
+        /// <summary>
+        /// Source의 등록 시점 Row 매핑과 등록·교체·재로드 상태를 함께 소유한다.
+        /// </summary>
+        // ======================================================================
+        private sealed class SourceState
+        {
+            // ------------------------------------------------------------
+            /// <summary>
+            /// Source 등록 때 확정한 타입별 Key·Row 매핑.
+            /// </summary>
+            // ------------------------------------------------------------
+            public Dictionary<Type, RowMap> RowsByType { get; private set; }
+
+            // ------------------------------------------------------------
+            /// <summary>
+            /// 제거·재등록을 구별하는 등록 수명 번호.
+            /// </summary>
+            // ------------------------------------------------------------
+            public long Registration { get; }
+
+            // ------------------------------------------------------------
+            /// <summary>
+            /// 같은 등록 안에서 Source 교체를 구별하는 세대 번호.
+            /// </summary>
+            // ------------------------------------------------------------
+            public long Generation { get; private set; }
+
+            // ------------------------------------------------------------
+            /// <summary>
+            /// 원본의 변경을 아직 메모리에 반영하지 못한 상태.
+            /// </summary>
+            // ------------------------------------------------------------
+            public bool NeedsReload { get; private set; }
+
+            // ------------------------------------------------------------
+            /// <summary>
+            /// 하나의 Source 등록 상태를 구성한다.
+            /// </summary>
+            // ------------------------------------------------------------
+            public SourceState(Dictionary<Type, RowMap> rowsByType, long registration, long generation)
+            {
+                RowsByType = rowsByType;
+                Registration = registration;
+                Generation = generation;
+            }
+
+            // ------------------------------------------------------------
+            /// <summary>
+            /// 같은 등록의 Row 매핑과 세대를 교체한다.
+            /// </summary>
+            // ------------------------------------------------------------
+            public void Replace
+            (
+                Dictionary<Type, RowMap> rowsByType,
+                long generation,
+                bool clearReload
+            )
+            {
+                RowsByType = rowsByType;
+                Generation = generation;
+                if (clearReload)
+                {
+                    NeedsReload = false;
+                }
+            }
+
+            // ------------------------------------------------------------
+            /// <summary>
+            /// 현재 등록의 원본 재로드가 필요함을 표시한다.
+            /// </summary>
+            // ------------------------------------------------------------
+            public void MarkForReload()
+            {
+                NeedsReload = true;
+            }
+        }
+
+    #endregion
+
+    #region 조회 인덱스 및 Table View
+
         // ============================================================
         /// <summary>
-        /// Source lookup을 IReadOnlyTable로 노출하는 비제네릭 view.
+        /// 타입별 값과 소유 Source 조회를 하나의 갱신 단위로 묶는다.
+        /// </summary>
+        // ============================================================
+        private sealed class TypeLookup
+        {
+            // ------------------------------------------------------------
+            /// <summary>
+            /// Key별 원본 Row 참조.
+            /// </summary>
+            // ------------------------------------------------------------
+            public Dictionary<string, ITableValue> Values { get; } = new();
+
+            // ------------------------------------------------------------
+            /// <summary>
+            /// Key별 등록 Source.
+            /// </summary>
+            // ------------------------------------------------------------
+            public Dictionary<string, Source> Sources { get; } = new();
+
+            // ------------------------------------------------------------
+            /// <summary>
+            /// 같은 Key의 값과 소유 Source를 함께 추가한다.
+            /// </summary>
+            // ------------------------------------------------------------
+            public void Add(string key, ITableValue value, Source source)
+            {
+                Values.Add(key, value);
+                Sources.Add(key, source);
+            }
+        }
+
+        // ============================================================
+        /// <summary>
+        /// Row Dictionary를 IReadOnlyTable로 노출한다.
         /// </summary>
         // ============================================================
         private sealed class ReadOnlyTableView : IReadOnlyTable
@@ -255,7 +379,7 @@ namespace inonego.Xeri.Data
             public Type ValueType => valueType;
 
             private readonly Type valueType;
-            private readonly IReadOnlyDictionary<string, ITableValue> lookup;
+            private readonly RowMap lookup;
 
             // ------------------------------------------------------------
             /// <summary>
@@ -265,7 +389,7 @@ namespace inonego.Xeri.Data
             public ReadOnlyTableView
             (
                 Type valueType,
-                IReadOnlyDictionary<string, ITableValue> lookup
+                RowMap lookup
             )
             {
                 this.valueType = valueType;
@@ -281,8 +405,7 @@ namespace inonego.Xeri.Data
             {
                 get
                 {
-                    lookup.TryGetValue(key, out var value);
-                    return value;
+                    return lookup.TryGetValue(key, out var value) ? value : null;
                 }
             }
 
@@ -301,12 +424,12 @@ namespace inonego.Xeri.Data
             public IEnumerator<KeyValuePair<string, ITableValue>> GetEnumerator() => lookup.GetEnumerator();
         }
 
-        // ================================================================================
+        // ======================================================================
         /// <summary>
-        /// <br/> Source lookup을 IReadOnlyTable<T>로 노출하는 제네릭 view.
-        /// <br/> 별도 row 복사 없이 원본 lookup을 타입 안전하게 읽는다.
+        /// <br/> TypeLookup의 Row 값을 IReadOnlyTable<T>로 노출하는 제네릭 View.
+        /// <br/> 별도 Row 복사 없이 조회 Dictionary를 타입 안전하게 읽는다.
         /// </summary>
-        // ================================================================================
+        // ======================================================================
         private sealed class ReadOnlyTableView<TTableValue> :
             IReadOnlyTable<TTableValue>,
             IReadOnlyDictionary<string, TTableValue>
@@ -356,14 +479,14 @@ namespace inonego.Xeri.Data
             // ------------------------------------------------------------
             public Type ValueType => typeof(TTableValue);
 
-            private readonly IReadOnlyDictionary<string, ITableValue> lookup;
+            private readonly RowMap lookup;
 
             // ------------------------------------------------------------
             /// <summary>
             /// Source lookup으로 타입 안전한 읽기 전용 view를 생성한다.
             /// </summary>
             // ------------------------------------------------------------
-            public ReadOnlyTableView(IReadOnlyDictionary<string, ITableValue> lookup)
+            public ReadOnlyTableView(RowMap lookup)
             {
                 this.lookup = lookup;
             }
@@ -377,12 +500,12 @@ namespace inonego.Xeri.Data
             {
                 get
                 {
-                    lookup.TryGetValue(key, out var value);
-                    return (TTableValue)value;
+                    return lookup.TryGetValue(key, out var value) ? (TTableValue)value : null;
                 }
             }
 
             IEnumerable<ITableValue> IReadOnlyTable.Values => lookup.Values;
+
             ITableValue IReadOnlyTable.this[string key] => this[key];
 
             // ------------------------------------------------------------
@@ -406,9 +529,9 @@ namespace inonego.Xeri.Data
             // ------------------------------------------------------------
             public bool TryGetValue(string key, out TTableValue value)
             {
-                if (lookup.TryGetValue(key, out var lValue))
+                if (lookup.TryGetValue(key, out var row))
                 {
-                    value = (TTableValue)lValue;
+                    value = (TTableValue)row;
                     return true;
                 }
 
@@ -444,27 +567,33 @@ namespace inonego.Xeri.Data
             IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         }
 
-        // ================================================================================
+    #endregion
+
+    #region 슬롯 및 Scope 관리
+
+        // ============================================================
         /// <summary>
         /// <br/> Named 슬롯 접근자.
-        /// <br/> InstanceRegistry의 NamedAccessor를 상속해 IReadOnlyDataPackage로 노출한다.
+        /// <br/> Core InstanceRegistry의 Named 접근자를 조합한다.
+        /// <br/> 공개 반환값은 IReadOnlyDataPackage로 제한한다.
         /// </summary>
-        // ================================================================================
-        public class NamedAccessor : InstanceRegistry<DataPackage>.NamedAccessor
+        // ============================================================
+        public class NamedAccessor
         {
-            internal NamedAccessor(InstanceRegistry<DataPackage> owner) : base(owner) {}
+            private readonly InstanceRegistry<DataPackage>.NamedAccessor accessor;
+
+            internal NamedAccessor(InstanceRegistry<DataPackage> owner)
+            {
+                accessor = owner.Named;
+            }
 
             // ------------------------------------------------------------
             /// <summary>
             /// 지정 슬롯의 DataPackage를 IReadOnlyDataPackage로 반환한다.
             /// </summary>
             // ------------------------------------------------------------
-            public new IReadOnlyDataPackage this[string slot] => base[slot];
+            public IReadOnlyDataPackage this[string slot] => accessor[slot];
         }
-
-    #endregion
-
-    #region 정적 필드
 
         private static readonly InstanceRegistry<DataPackage> registry = new();
 
@@ -489,9 +618,17 @@ namespace inonego.Xeri.Data
         // ------------------------------------------------------------
         public static event Action OnChange;
 
-    #endregion
-
-    #region 정적 메서드
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 현재 슬롯의 DataPackage를 안전하게 가져온다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public static bool TryCurrent(out IReadOnlyDataPackage package)
+        {
+            var result = registry.TryCurrent(out var pkg);
+            package = pkg;
+            return result;
+        }
 
         // ------------------------------------------------------------
         /// <summary>
@@ -537,12 +674,23 @@ namespace inonego.Xeri.Data
             OnChange?.Invoke();
         }
 
-        // --------------------------------------------------------------------------------
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 모든 슬롯을 초기화한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public static void Clear()
+        {
+            registry.Clear();
+            OnChange?.Invoke();
+        }
+
+        // ----------------------------------------------------------------------
         /// <summary>
         /// <br/> 지정 슬롯을 현재 컨텍스트로 전환하는 스코프를 반환한다.
         /// <br/> Dispose 시 이전 슬롯으로 자동 복원된다. OnChange를 발생시키지 않는다.
         /// </summary>
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         public static IDisposable Scope(string slot) => registry.Scope(slot);
 
         // ------------------------------------------------------------
@@ -562,32 +710,9 @@ namespace inonego.Xeri.Data
         // ----------------------------------------------------------------------
         public static void CloseScope() => registry.CloseScope();
 
-        // ------------------------------------------------------------
-        /// <summary>
-        /// 모든 슬롯을 초기화한다.
-        /// </summary>
-        // ------------------------------------------------------------
-        public static void Clear()
-        {
-            registry.Clear();
-            OnChange?.Invoke();
-        }
-
-        // ------------------------------------------------------------
-        /// <summary>
-        /// 현재 슬롯의 DataPackage를 안전하게 가져온다.
-        /// </summary>
-        // ------------------------------------------------------------
-        public static bool TryCurrent(out IReadOnlyDataPackage package)
-        {
-            var result = registry.TryCurrent(out var pkg);
-            package = pkg;
-            return result;
-        }
-
     #endregion
 
-    #region 인스턴스 데이터
+    #region Table 및 Source 상태
 
         // ------------------------------------------------------------
         /// <summary>
@@ -601,10 +726,10 @@ namespace inonego.Xeri.Data
 
         // ------------------------------------------------------------
         /// <summary>
-        /// Source별 원본 Table 보관소.
+        /// Source별 등록 매핑과 수명·재로드 상태를 보관한다.
         /// </summary>
         // ------------------------------------------------------------
-        private Dictionary<Source, Dictionary<Type, ITable>> Sources
+        private Dictionary<Source, SourceState> Sources
         {
             get
             {
@@ -613,27 +738,51 @@ namespace inonego.Xeri.Data
         }
 
         [NonSerialized]
-        private Dictionary<Source, Dictionary<Type, ITable>> sources = new();
+        private Dictionary<Source, SourceState> sources = new();
 
-        // ------------------------------------------------------------
+        // ----------------------------------------------------------------------
         /// <summary>
-        /// Source-backed ValueType별 runtime lookup.
+        /// Source-backed Type별 Value/Source 조회를 묶은 runtime lookup.
         /// </summary>
-        // ------------------------------------------------------------
-        private Dictionary<Type, Dictionary<string, ITableValue>> SourceLookups
+        // ----------------------------------------------------------------------
+        private Dictionary<Type, TypeLookup> Lookups
         {
             get
             {
-                return sourceLookups ??= new();
+                return lookups ??= new();
             }
         }
 
         [NonSerialized]
-        private Dictionary<Type, Dictionary<string, ITableValue>> sourceLookups = new();
+        private Dictionary<Type, TypeLookup> lookups = new();
+
+        // 제거·재등록과 Source 교체의 버전은 서로 독립적으로 증가한다.
+        [NonSerialized]
+        private long nextSourceRegistration;
+
+        [NonSerialized]
+        private long nextSourceGeneration;
+
+        // Source 상태와 조회 인덱스를 동일한 잠금으로 보호한다.
+        private object SourceLock
+        {
+            get
+            {
+                if (sourceLock == null)
+                {
+                    Interlocked.CompareExchange(ref sourceLock, new object(), null);
+                }
+
+                return sourceLock;
+            }
+        }
+
+        [NonSerialized]
+        private object sourceLock = new();
 
     #endregion
 
-    #region 데이터 조회
+    #region Row 및 Table 조회
 
         // ------------------------------------------------------------
         /// <summary>
@@ -644,16 +793,52 @@ namespace inonego.Xeri.Data
         {
             get
             {
-                foreach (var (_, lTable) in dictionary)
+                // 열거 중 Source가 교체돼도 컬렉션 무효화가 발생하지 않는 목록을 반환한다.
+                lock (SourceLock)
                 {
-                    yield return lTable;
-                }
+                    var tables = new List<IReadOnlyTable>();
 
-                foreach (var (valueType, lLookup) in SourceLookups)
-                {
-                    yield return new ReadOnlyTableView(valueType, lLookup);
+                    foreach (var (_, lTable) in dictionary)
+                    {
+                        tables.Add(lTable);
+                    }
+
+                    foreach (var (valueType, lLookup) in Lookups)
+                    {
+                        tables.Add(new ReadOnlyTableView(valueType, lLookup.Values));
+                    }
+
+                    return tables;
                 }
             }
+        }
+
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 지정 타입의 테이블을 반환한다. 없으면 예외.
+        /// </summary>
+        // ------------------------------------------------------------
+        public IReadOnlyTable Table(Type valueType)
+        {
+            lock (SourceLock)
+            {
+                return TableCore(valueType);
+            }
+        }
+
+        private IReadOnlyTable TableCore(Type valueType)
+        {
+            if (Lookups.TryGetValue(valueType, out var lLookup))
+            {
+                return new ReadOnlyTableView(valueType, lLookup.Values);
+            }
+
+            if (dictionary.TryGetValue(valueType, out ITable lTable))
+            {
+                return lTable;
+            }
+
+            throw new InvalidOperationException($"데이터 패키지에 {valueType.Name} 타입의 테이블이 존재하지 않습니다.");
         }
 
         // ------------------------------------------------------------
@@ -664,16 +849,36 @@ namespace inonego.Xeri.Data
         public TTableValue Read<TTableValue>(string key)
         where TTableValue : class, ITableValue
         {
+            lock (SourceLock)
+            {
+                return ReadCore<TTableValue>(key);
+            }
+        }
+
+        private TTableValue ReadCore<TTableValue>(string key)
+        where TTableValue : class, ITableValue
+        {
             var valueType = typeof(TTableValue);
 
-            // Source-backed 타입은 runtime lookup에서 바로 조회해 Table view 생성을 피한다.
-            if (SourceLookups.TryGetValue(valueType, out var lLookup))
+            // Source와 direct Table 모두 Key 누락은 실패로 취급한다.
+            if (Lookups.TryGetValue(valueType, out var lLookup))
             {
-                lLookup.TryGetValue(key, out var value);
-                return value as TTableValue;
+                if (lLookup.Values.TryGetValue(key, out var value))
+                {
+                    return (TTableValue)value;
+                }
+            }
+            else
+            {
+                var table = TableCore<TTableValue>();
+                var value = table[key];
+                if (value != null)
+                {
+                    return value;
+                }
             }
 
-            return Table<TTableValue>()[key];
+            throw new KeyNotFoundException($"{valueType.Name} 타입에 Key '{key}'가 존재하지 않습니다.");
         }
 
         // ------------------------------------------------------------
@@ -684,12 +889,21 @@ namespace inonego.Xeri.Data
         public TTableValue TryRead<TTableValue>(string key)
         where TTableValue : class, ITableValue
         {
+            lock (SourceLock)
+            {
+                return TryReadCore<TTableValue>(key);
+            }
+        }
+
+        private TTableValue TryReadCore<TTableValue>(string key)
+        where TTableValue : class, ITableValue
+        {
             var valueType = typeof(TTableValue);
 
             // Source-backed 타입은 runtime lookup에서 바로 조회한다.
-            if (SourceLookups.TryGetValue(valueType, out var lLookup))
+            if (Lookups.TryGetValue(valueType, out var lLookup))
             {
-                lLookup.TryGetValue(key, out var value);
+                lLookup.Values.TryGetValue(key, out var value);
                 return value as TTableValue;
             }
 
@@ -701,6 +915,27 @@ namespace inonego.Xeri.Data
             return (lTable as IReadOnlyTable<TTableValue>)?[key];
         }
 
+        // ----------------------------------------------------------------------
+        /// <summary>
+        /// <br/> 지정 타입과 Key를 등록한 Source를 조회한다.
+        /// <br/> 직접 추가한 Table 또는 없는 Key는 Source를 반환하지 않는다.
+        /// </summary>
+        // ----------------------------------------------------------------------
+        public bool TryFindSource<TTableValue>(string key, out Source source)
+        where TTableValue : class, ITableValue
+        {
+            lock (SourceLock)
+            {
+                if (Lookups.TryGetValue(typeof(TTableValue), out var lLookup))
+                {
+                    return lLookup.Sources.TryGetValue(key, out source);
+                }
+
+                source = default;
+                return false;
+            }
+        }
+
         // ------------------------------------------------------------
         /// <summary>
         /// 지정 타입의 테이블을 반환한다.
@@ -709,11 +944,20 @@ namespace inonego.Xeri.Data
         public IReadOnlyTable<TTableValue> Table<TTableValue>()
         where TTableValue : class, ITableValue
         {
+            lock (SourceLock)
+            {
+                return TableCore<TTableValue>();
+            }
+        }
+
+        private IReadOnlyTable<TTableValue> TableCore<TTableValue>()
+        where TTableValue : class, ITableValue
+        {
             var valueType = typeof(TTableValue);
 
-            if (SourceLookups.TryGetValue(valueType, out var lLookup))
+            if (Lookups.TryGetValue(valueType, out var lLookup))
             {
-                return new ReadOnlyTableView<TTableValue>(lLookup);
+                return new ReadOnlyTableView<TTableValue>(lLookup.Values);
             }
 
             if (dictionary.TryGetValue(valueType, out ITable lTable))
@@ -724,29 +968,9 @@ namespace inonego.Xeri.Data
             throw new InvalidOperationException($"데이터 패키지에 {valueType.Name} 타입의 테이블이 존재하지 않습니다.");
         }
 
-        // ------------------------------------------------------------
-        /// <summary>
-        /// 지정 타입의 테이블을 반환한다. 없으면 예외.
-        /// </summary>
-        // ------------------------------------------------------------
-        public IReadOnlyTable Table(Type valueType)
-        {
-            if (SourceLookups.TryGetValue(valueType, out var lLookup))
-            {
-                return new ReadOnlyTableView(valueType, lLookup);
-            }
-
-            if (dictionary.TryGetValue(valueType, out ITable lTable))
-            {
-                return lTable;
-            }
-
-            throw new InvalidOperationException($"데이터 패키지에 {valueType.Name} 타입의 테이블이 존재하지 않습니다.");
-        }
-
     #endregion
 
-    #region 직접 Table 관리
+    #region 직접 Table 등록 및 제거
 
         // ------------------------------------------------------------
         /// <summary>
@@ -767,7 +991,15 @@ namespace inonego.Xeri.Data
         // ------------------------------------------------------------
         public void AddTable(Type valueType, ITable lTable)
         {
-            if (dictionary.ContainsKey(valueType) || SourceLookups.ContainsKey(valueType))
+            lock (SourceLock)
+            {
+                AddTableCore(valueType, lTable);
+            }
+        }
+
+        private void AddTableCore(Type valueType, ITable lTable)
+        {
+            if (dictionary.ContainsKey(valueType) || Lookups.ContainsKey(valueType))
             {
                 throw new InvalidOperationException($"데이터 패키지에 {valueType.Name} 타입의 테이블이 이미 존재합니다.");
             }
@@ -783,10 +1015,19 @@ namespace inonego.Xeri.Data
         public void RemoveTable<TTableValue>()
         where TTableValue : class, ITableValue
         {
+            lock (SourceLock)
+            {
+                RemoveTableCore<TTableValue>();
+            }
+        }
+
+        private void RemoveTableCore<TTableValue>()
+        where TTableValue : class, ITableValue
+        {
             var valueType = typeof(TTableValue);
 
             // Source-backed 조회 상태는 Source 단위 수명 계약을 우회해 제거하지 않는다.
-            if (SourceLookups.ContainsKey(valueType))
+            if (Lookups.ContainsKey(valueType))
             {
                 throw new InvalidOperationException
                 (
@@ -804,14 +1045,20 @@ namespace inonego.Xeri.Data
 
     #endregion
 
-    #region Source 구성
+    #region Source 등록 및 변경
 
         // ------------------------------------------------------------
         /// <summary>
         /// 지정 Source가 현재 Package에 등록되어 있는지 반환한다.
         /// </summary>
         // ------------------------------------------------------------
-        public bool HasSource(Source source) => source.HasValue && Sources.ContainsKey(source);
+        public bool HasSource(Source source)
+        {
+            lock (SourceLock)
+            {
+                return source.HasValue && Sources.ContainsKey(source);
+            }
+        }
 
         // ------------------------------------------------------------
         /// <summary>
@@ -820,7 +1067,14 @@ namespace inonego.Xeri.Data
         // ------------------------------------------------------------
         public void AddSource(Source source, ITable lTable)
         {
-            AddSource(source, new[] { lTable });
+            AddSource
+            (
+                source,
+                new[]
+                {
+                    lTable
+                }
+            );
         }
 
         // ------------------------------------------------------------
@@ -830,6 +1084,20 @@ namespace inonego.Xeri.Data
         // ------------------------------------------------------------
         public void AddSource(Source source, IEnumerable<ITable> lTables)
         {
+            // 외부 Table을 잠금 밖에서 한 번 읽고, 이후에는 Package 소유 매핑만 사용한다.
+            var rowsByType = CreateTableMap(lTables);
+            lock (SourceLock)
+            {
+                AddSourceCore(source, rowsByType);
+            }
+        }
+
+        private void AddSourceCore
+        (
+            Source source,
+            Dictionary<Type, RowMap> rowsByType
+        )
+        {
             // 입력 검증: 같은 Source 재등록과 현재 Package 상태와의 충돌을 commit 전에 차단한다.
             ValidateSource(source);
 
@@ -838,23 +1106,8 @@ namespace inonego.Xeri.Data
                 throw new InvalidOperationException($"Source '{source}'가 이미 등록되어 있습니다.");
             }
 
-            var lTablesByType = CreateTableMap(lTables);
-            ValidateNewSource(source, lTablesByType);
-
-            // 여러 ValueType의 다음 lookup을 모두 구성한 뒤 한 번에 공개한다.
-            var lLookups = new Dictionary<Type, Dictionary<string, ITableValue>>();
-
-            foreach (var valueType in lTablesByType.Keys)
-            {
-                lLookups.Add(valueType, BuildLookup(valueType, source, lTablesByType));
-            }
-
-            foreach (var (valueType, lLookup) in lLookups)
-            {
-                SourceLookups[valueType] = lLookup;
-            }
-
-            Sources.Add(source, lTablesByType);
+            ValidateSourceRows(source, rowsByType);
+            ApplySource(source, null, rowsByType);
         }
 
         // ------------------------------------------------------------
@@ -864,40 +1117,23 @@ namespace inonego.Xeri.Data
         // ------------------------------------------------------------
         public void RemoveSource(Source source)
         {
+            lock (SourceLock)
+            {
+                RemoveSourceCore(source);
+            }
+        }
+
+        private void RemoveSourceCore(Source source)
+        {
             // 입력 검증: 제거 대상 Source가 실제 현재 상태에 존재해야 한다.
             ValidateSource(source);
 
-            if (!Sources.TryGetValue(source, out var lTablesByType))
+            if (!Sources.TryGetValue(source, out var state))
             {
                 throw new InvalidOperationException($"Source '{source}'가 등록되어 있지 않습니다.");
             }
 
-            // 제거 후 남는 Source만으로 영향받은 ValueType lookup을 먼저 구성한다.
-            var lLookups = new Dictionary<Type, Dictionary<string, ITableValue>>();
-
-            foreach (var valueType in lTablesByType.Keys)
-            {
-                var lLookup = BuildLookup(valueType, source, null);
-
-                if (lLookup != null)
-                {
-                    lLookups.Add(valueType, lLookup);
-                }
-            }
-
-            // 다음 lookup이 모두 준비된 뒤 현재 lookup과 Source 보관 상태를 교체한다.
-            foreach (var valueType in lTablesByType.Keys)
-            {
-                if (lLookups.TryGetValue(valueType, out var lLookup))
-                {
-                    SourceLookups[valueType] = lLookup;
-                    continue;
-                }
-
-                SourceLookups.Remove(valueType);
-            }
-
-            Sources.Remove(source);
+            ApplySource(source, state, null);
         }
 
         // ------------------------------------------------------------
@@ -907,7 +1143,14 @@ namespace inonego.Xeri.Data
         // ------------------------------------------------------------
         public void ReplaceSource(Source source, ITable lTable)
         {
-            ReplaceSource(source, new[] { lTable });
+            ReplaceSource
+            (
+                source,
+                new[]
+                {
+                    lTable
+                }
+            );
         }
 
         // ------------------------------------------------------------
@@ -917,66 +1160,126 @@ namespace inonego.Xeri.Data
         // ------------------------------------------------------------
         public void ReplaceSource(Source source, IEnumerable<ITable> lTables)
         {
+            var rowsByType = CreateTableMap(lTables);
+            lock (SourceLock)
+            {
+                ReplaceSourceCore(source, rowsByType, false);
+            }
+        }
+
+        private void ReplaceSourceCore
+        (
+            Source source,
+            Dictionary<Type, RowMap> rowsByType,
+            bool clearReload
+        )
+        {
             // 입력 검증: 기존 Source가 있어야 reload/replace 의미가 성립한다.
             ValidateSource(source);
 
-            if (!Sources.TryGetValue(source, out var lCurrentTables))
+            if (!Sources.TryGetValue(source, out var state))
             {
                 throw new InvalidOperationException($"Source '{source}'가 등록되어 있지 않습니다.");
             }
 
-            var lTablesByType = CreateTableMap(lTables);
-            ValidateNewSource(source, lTablesByType);
-
-            // 기존/신규 ValueType의 다음 lookup을 중복 없이 준비한다.
-            var lLookups = new Dictionary<Type, Dictionary<string, ITableValue>>();
-
-            foreach (var valueType in lCurrentTables.Keys)
-            {
-                var lLookup = BuildLookup(valueType, source, lTablesByType);
-
-                if (lLookup != null)
-                {
-                    lLookups.Add(valueType, lLookup);
-                }
-            }
-
-            foreach (var valueType in lTablesByType.Keys)
-            {
-                if (lCurrentTables.ContainsKey(valueType))
-                {
-                    continue;
-                }
-
-                lLookups.Add(valueType, BuildLookup(valueType, source, lTablesByType));
-            }
-
-            // 모든 lookup이 준비된 뒤 기존 Source와 파생 조회 상태를 한 번에 교체한다.
-            foreach (var valueType in lCurrentTables.Keys)
-            {
-                if (lLookups.TryGetValue(valueType, out var lLookup))
-                {
-                    SourceLookups[valueType] = lLookup;
-                    continue;
-                }
-
-                SourceLookups.Remove(valueType);
-            }
-
-            foreach (var valueType in lTablesByType.Keys)
-            {
-                if (!lCurrentTables.ContainsKey(valueType))
-                {
-                    SourceLookups[valueType] = lLookups[valueType];
-                }
-            }
-
-            Sources[source] = lTablesByType;
+            ValidateSourceRows(source, rowsByType);
+            ApplySource(source, state, rowsByType, clearReload);
         }
 
     #endregion
 
-    #region Source 내부 처리
+    #region Source 재로드 상태
+
+        // ----------------------------------------------------------------------
+        /// <summary>
+        /// 아직 원본 변경을 반영하지 못해 마지막 유효 상태를 제공하는 Source인지 반환한다.
+        /// </summary>
+        // ----------------------------------------------------------------------
+        public bool NeedsSourceReload(Source source)
+        {
+            lock (SourceLock)
+            {
+                return source.HasValue && Sources.TryGetValue(source, out var state) && state.NeedsReload;
+            }
+        }
+
+        // 현재 Source의 등록 수명을 조회한다. 제거·재등록 시 이전 수명과 구별된다.
+        internal long SourceRegistration(Source source)
+        {
+            lock (SourceLock)
+            {
+                return Sources.TryGetValue(source, out var state) ? state.Registration : 0L;
+            }
+        }
+
+        // 같은 등록 안에서 교체된 Source의 세대를 조회한다.
+        internal long SourceGeneration(Source source)
+        {
+            lock (SourceLock)
+            {
+                return Sources.TryGetValue(source, out var state) ? state.Generation : 0L;
+            }
+        }
+
+        // 현재 등록을 확인하면서 Source를 재로드 필요 상태로 표시한다.
+        internal long MarkSourceForReload(Source source, long registration)
+        {
+            lock (SourceLock)
+            {
+                if (registration == 0L || !Sources.TryGetValue(source, out var state) ||
+                    state.Registration != registration)
+                {
+                    return 0L;
+                }
+
+                state.MarkForReload();
+                return state.Generation;
+            }
+        }
+
+        // 늦게 끝난 Source 로드는 현재 등록과 버전이 모두 같을 때만 공개한다.
+        internal bool TryReplaceSource
+        (
+            Source source,
+            long registration,
+            long generation,
+            IEnumerable<ITable> lTables
+        )
+        {
+            bool IsCurrentSource()
+            {
+                return registration != 0L && generation != 0L &&
+                    Sources.TryGetValue(source, out var state) &&
+                    state.Registration == registration && state.Generation == generation;
+            }
+
+            // 이미 무효화된 재로드는 외부 Table을 열거하거나 검증하지 않고 버린다.
+            lock (SourceLock)
+            {
+                if (!IsCurrentSource())
+                {
+                    return false;
+                }
+            }
+
+            var rowsByType = CreateTableMap(lTables);
+            lock (SourceLock)
+            {
+                // Table 준비 중 Source가 변경될 수 있으므로 공개 직전에 다시 확인한다.
+                if (!IsCurrentSource())
+                {
+                    return false;
+                }
+
+                // 검증된 재로드 결과만 Source의 미반영 상태를 해제할 수 있다.
+                ReplaceSourceCore(source, rowsByType, true);
+                return true;
+            }
+        }
+
+    #endregion
+
+    #region Source 매핑 검증 및 적용
 
         // ------------------------------------------------------------
         /// <summary>
@@ -993,17 +1296,17 @@ namespace inonego.Xeri.Data
 
         // ------------------------------------------------------------
         /// <summary>
-        /// 입력 Table 목록을 ValueType별 맵으로 정규화한다.
+        /// 외부 Table의 현재 Key·Row 매핑을 Package 소유 상태로 고정한다.
         /// </summary>
         // ------------------------------------------------------------
-        private static Dictionary<Type, ITable> CreateTableMap(IEnumerable<ITable> lTables)
+        private static Dictionary<Type, RowMap> CreateTableMap(IEnumerable<ITable> lTables)
         {
             if (lTables == null)
             {
                 throw new ArgumentNullException(nameof(lTables));
             }
 
-            var result = new Dictionary<Type, ITable>();
+            var result = new Dictionary<Type, RowMap>();
 
             // Source 내부에서는 ValueType 하나당 하나의 Table만 소유하도록 맵으로 정규화한다.
             foreach (var lTable in lTables)
@@ -1013,7 +1316,23 @@ namespace inonego.Xeri.Data
                     throw new ArgumentException("Source Table 목록에 null이 포함되어 있습니다.", nameof(lTables));
                 }
 
-                result.Add(lTable.ValueType, lTable);
+                // 등록된 Key와 Row 식별자가 다르면 이후 조회 인덱스의 의미가 불명확해진다.
+                var values = new Dictionary<string, ITableValue>();
+                foreach (var key in lTable.Keys)
+                {
+                    var value = lTable[key];
+                    if (value == null || value.Key != key)
+                    {
+                        throw new InvalidOperationException
+                        (
+                            $"Source Table의 Key '{key}'와 Row 식별자가 일치하지 않습니다."
+                        );
+                    }
+
+                    values.Add(key, value);
+                }
+
+                result.Add(lTable.ValueType, values);
             }
 
             if (result.Count == 0)
@@ -1024,18 +1343,18 @@ namespace inonego.Xeri.Data
             return result;
         }
 
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         /// <summary>
-        /// 새 Source Table이 direct Table 또는 다른 Source Key와 충돌하지 않는지 검증한다.
+        /// Source의 Row 매핑이 직접 Table이나 다른 Source와 충돌하는지 검증한다.
         /// </summary>
-        // --------------------------------------------------------------------------------
-        private void ValidateNewSource
+        // ----------------------------------------------------------------------
+        private void ValidateSourceRows
         (
             Source source,
-            IReadOnlyDictionary<Type, ITable> lTablesByType
+            IReadOnlyDictionary<Type, RowMap> rowsByType
         )
         {
-            foreach (var (valueType, lTable) in lTablesByType)
+            foreach (var (valueType, rows) in rowsByType)
             {
                 // direct Table과 Source-backed lookup은 같은 ValueType을 동시에 소유하지 않는다.
                 if (dictionary.ContainsKey(valueType))
@@ -1047,16 +1366,16 @@ namespace inonego.Xeri.Data
                 }
 
                 // ReplaceSource에서는 자기 기존 Table을 제외한 다른 Source만 충돌 대상으로 본다.
-                foreach (var (otherSource, lOtherTables) in Sources)
+                foreach (var (otherSource, otherState) in Sources)
                 {
-                    if (otherSource == source || !lOtherTables.TryGetValue(valueType, out var lOtherTable))
+                    if (otherSource == source || !otherState.RowsByType.TryGetValue(valueType, out var existingRows))
                     {
                         continue;
                     }
 
-                    foreach (var key in lTable.Keys)
+                    foreach (var key in rows.Keys)
                     {
-                        if (lOtherTable.Has(key))
+                        if (existingRows.ContainsKey(key))
                         {
                             throw new InvalidOperationException
                             (
@@ -1068,50 +1387,115 @@ namespace inonego.Xeri.Data
             }
         }
 
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         /// <summary>
-        /// <br/> 지정 Source를 제외하고 새 Table 집합을 반영한 ValueType runtime lookup을 구성한다.
-        /// <br/> lookup에는 Source-owned Table의 원본 row reference를 그대로 넣는다.
+        /// <br/> 대상 Source를 제외하고 다음 Type별 조회 인덱스를 구성한다.
+        /// <br/> 같은 Type의 Value/Source Dictionary를 한 번의 순회로 채운다.
         /// </summary>
-        // --------------------------------------------------------------------------------
-        private Dictionary<string, ITableValue> BuildLookup
+        // ----------------------------------------------------------------------
+        private TypeLookup BuildLookup
         (
             Type valueType,
             Source source,
-            IReadOnlyDictionary<Type, ITable> lTablesByType
+            IReadOnlyDictionary<Type, RowMap> rowsByType
         )
         {
-            var lLookup = new Dictionary<string, ITableValue>();
+            var lLookup = new TypeLookup();
             var hasTable = false;
 
             // 현재 Source 중 교체/제거 대상만 제외하고 같은 ValueType의 Table을 반영한다.
-            foreach (var (otherSource, lOtherTables) in Sources)
+            foreach (var (otherSource, otherState) in Sources)
             {
-                if (otherSource == source || !lOtherTables.TryGetValue(valueType, out var lTable))
+                if (otherSource == source || !otherState.RowsByType.TryGetValue(valueType, out var existingRows))
                 {
                     continue;
                 }
 
                 hasTable = true;
 
-                foreach (var key in lTable.Keys)
+                foreach (var (key, value) in existingRows)
                 {
-                    lLookup.Add(key, lTable[key]);
+                    lLookup.Add(key, value, otherSource);
                 }
             }
 
             // Add/Replace에서는 새 Source Table을 마지막에 반영하고 Remove에서는 생략한다.
-            if (lTablesByType != null && lTablesByType.TryGetValue(valueType, out var lNewTable))
+            if (rowsByType != null && rowsByType.TryGetValue(valueType, out var newRows))
             {
                 hasTable = true;
 
-                foreach (var key in lNewTable.Keys)
+                foreach (var (key, value) in newRows)
                 {
-                    lLookup.Add(key, lNewTable[key]);
+                    lLookup.Add(key, value, source);
                 }
             }
 
             return hasTable ? lLookup : null;
+        }
+
+        // ----------------------------------------------------------------------
+        /// <summary>
+        /// <br/> 변경 대상 Type의 Lookup을 모두 준비한 후 등록 상태와 함께 공개한다.
+        /// <br/> 새 Lookup 구성에 실패하면 기존 Source와 조회 상태는 유지된다.
+        /// </summary>
+        // ----------------------------------------------------------------------
+        private void ApplySource
+        (
+            Source source,
+            SourceState current,
+            Dictionary<Type, RowMap> nextRowsByType,
+            bool clearReload = false
+        )
+        {
+            var affectedTypes = new HashSet<Type>();
+
+            if (current != null)
+            {
+                affectedTypes.UnionWith(current.RowsByType.Keys);
+            }
+
+            if (nextRowsByType != null)
+            {
+                affectedTypes.UnionWith(nextRowsByType.Keys);
+            }
+
+            // 같은 Type의 Value와 Source 인덱스를 한 번에 구성해 검증한다.
+            var nextLookups = new Dictionary<Type, TypeLookup>();
+
+            foreach (var valueType in affectedTypes)
+            {
+                nextLookups.Add(valueType, BuildLookup(valueType, source, nextRowsByType));
+            }
+
+            // 모든 Lookup이 준비된 뒤 Source 등록 상태를 전환한다.
+            if (nextRowsByType == null)
+            {
+                Sources.Remove(source);
+            }
+            else if (current == null)
+            {
+                Sources.Add
+                (
+                    source,
+                    new SourceState(nextRowsByType, ++nextSourceRegistration, ++nextSourceGeneration)
+                );
+            }
+            else
+            {
+                current.Replace(nextRowsByType, ++nextSourceGeneration, clearReload);
+            }
+
+            // 같은 잠금에서 완성된 Type Lookup만 공개하며, 이전 View의 원본은 보존한다.
+            foreach (var (valueType, lookup) in nextLookups)
+            {
+                if (lookup == null)
+                {
+                    Lookups.Remove(valueType);
+                    continue;
+                }
+
+                Lookups[valueType] = lookup;
+            }
         }
 
     #endregion

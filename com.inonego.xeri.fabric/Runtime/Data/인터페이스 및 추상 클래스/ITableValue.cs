@@ -13,5 +13,8 @@ namespace inonego.Xeri.Data
     /// 테이블에 저장될 수 있는 데이터를 위한 인터페이스.
     /// </summary>
     // ============================================================
-    public interface ITableValue : IKeyable<string> {}
+    public interface ITableValue : IKeyable<string>
+    {
+        // NONE
+    }
 }

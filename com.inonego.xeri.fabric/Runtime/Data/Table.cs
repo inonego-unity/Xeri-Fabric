@@ -1,6 +1,6 @@
 /* BLOCK_HEADER_BEGIN =======================================================================
 파일명 : Table.cs
-수정일 : 2026-08-30
+수정일 : 2026-11-13
 
 # 설명
 데이터 테이블 구현.
@@ -17,6 +17,8 @@ using UnityEngine;
 
 namespace inonego.Xeri.Data
 {
+    using inonego;
+    using inonego.Xeri;
     using inonego.Xeri.Serializable;
 
     // ============================================================
@@ -28,10 +30,15 @@ namespace inonego.Xeri.Data
     public class Table_V<TTableValue> : Table<TTableValue>
     where TTableValue : class, ITableValue
     {
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 값 직렬화 테이블의 Key별 항목을 반환한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public override Dictionary<string, TTableValue> Dictionary => dictionary;
+
         [SerializeField]
         private XDictionary_VV<string, TTableValue> dictionary = new();
-
-        public override Dictionary<string, TTableValue> Dictionary => dictionary;
     }
 
     // ============================================================
@@ -43,10 +50,15 @@ namespace inonego.Xeri.Data
     public class Table_R<TTableValue> : Table<TTableValue>
     where TTableValue : class, ITableValue
     {
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 참조 직렬화 테이블의 Key별 항목을 반환한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public override Dictionary<string, TTableValue> Dictionary => dictionary;
+
         [SerializeField]
         private XDictionary_VR<string, TTableValue> dictionary = new();
-
-        public override Dictionary<string, TTableValue> Dictionary => dictionary;
     }
 
     // ============================================================
@@ -59,13 +71,18 @@ namespace inonego.Xeri.Data
     where TTableValue : class, ITableValue
     {
 
-    #region 필드
+    #region Table 저장 구조
 
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 테이블의 키별 저장 구조를 제공합니다.
+        /// </summary>
+        // ------------------------------------------------------------
         public abstract Dictionary<string, TTableValue> Dictionary { get; }
 
     #endregion
 
-    #region IReadOnlyTable 인터페이스 구현
+    #region Table 조회 및 열거
 
         IReadOnlyDictionary<string, TTableValue> IReadOnlyTable<TTableValue>.Dictionary => Dictionary;
         Dictionary<string, TTableValue>          ITable<TTableValue>.Dictionary         => Dictionary;
@@ -105,11 +122,16 @@ namespace inonego.Xeri.Data
             }
         }
 
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 테이블 데이터를 순회할 열거자를 반환합니다.
+        /// </summary>
+        // ------------------------------------------------------------
         public IEnumerator GetEnumerator() => Dictionary.GetEnumerator();
 
     #endregion
 
-    #region 메서드
+    #region Table 재로드 및 변경
 
         // ------------------------------------------------------------
         /// <summary>

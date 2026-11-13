@@ -1,20 +1,24 @@
 /* BLOCK_HEADER_BEGIN =======================================================================
 파일명 : TEST_DataPackage.cs
-수정일 : 2026-08-28
+수정일 : 2026-11-13
 
 # 설명
 DataPackage 직접 Table, Source 구성, 슬롯/Scope와 REF 소비 흐름 테스트.
 
-# 테스트 구성
- T: 직접 Table 수명 흐름 (다중 타입/충돌/제거)
- D: Source 구성 흐름 (다중 Source/REF/Replace/Rollback/직접 Table 경계)
- S: 슬롯/Registry 흐름 (Scope/REF/OnChange/Clear)
+# 테스트 범위
+- 직접 Table 등록과 충돌·제거
+- Source 등록·교체·제거와 조회·소유권 정합성
+- 슬롯·Scope·Registry와 REF 소비 흐름
 ========================================================================= BLOCK_HEADER_END */
 
 using System;
+using System.Collections;
+using System.Collections.Generic;
 
 using UnityEngine;
 
+using inonego;
+using inonego.Xeri;
 using inonego.Xeri.Data;
 
 using NUnit;
@@ -23,15 +27,15 @@ using NUnit.Framework;
 namespace inonego.Xeri.Data.TEST._DataPackage
 {
 
-    // ================================================================================
+    // ======================================================================
     /// <summary>
     /// DataPackage 직접 Table, Source 구성, 슬롯 및 REF 핵심 기능 테스트 클래스.
     /// </summary>
-    // ================================================================================
+    // ======================================================================
     public class TEST_DataPackage
     {
 
-    #region 헬퍼
+    #region 테스트 데이터 및 헬퍼
 
         // ============================================================
         /// <summary>
@@ -64,6 +68,11 @@ namespace inonego.Xeri.Data.TEST._DataPackage
                 }
             }
 
+            // ------------------------------------------------------------
+            /// <summary>
+            /// 테스트 데이터 A의 수치 값이다.
+            /// </summary>
+            // ------------------------------------------------------------
             public int Value = 0;
         }
 
@@ -98,6 +107,11 @@ namespace inonego.Xeri.Data.TEST._DataPackage
                 }
             }
 
+            // ------------------------------------------------------------
+            /// <summary>
+            /// 테스트 데이터 B의 문자열 값이다.
+            /// </summary>
+            // ------------------------------------------------------------
             public string Value = null;
         }
 
@@ -171,7 +185,7 @@ namespace inonego.Xeri.Data.TEST._DataPackage
 
     #endregion
 
-    #region 픽스처
+    #region 테스트 수명
 
         // ------------------------------------------------------------
         /// <summary>
@@ -197,7 +211,7 @@ namespace inonego.Xeri.Data.TEST._DataPackage
 
     #endregion
 
-    #region T-1: 직접 Table 수명 흐름
+    #region 직접 Table 등록 및 제거
 
         // --------------------------------------------------------------------------------
         /// <summary>
@@ -209,8 +223,16 @@ namespace inonego.Xeri.Data.TEST._DataPackage
         public void TEST_DataPackage_Direct_Table_추가_충돌_제거_흐름()
         {
             var package = new DataPackage();
-            var valueA1 = new TestDataA { Key = "A1", Value = 100 };
-            var valueB1 = new TestDataB { Key = "B1", Value = "B1" };
+            var valueA1 = new TestDataA
+            {
+                Key = "A1",
+                Value = 100
+            };
+            var valueB1 = new TestDataB
+            {
+                Key = "B1",
+                Value = "B1"
+            };
 
             package.AddTable<TestTableA, TestDataA>(CreateTableA(valueA1));
             package.AddTable<TestTableB, TestDataB>(CreateTableB(valueB1));
@@ -218,13 +240,22 @@ namespace inonego.Xeri.Data.TEST._DataPackage
             // 두 타입이 함께 공개된 상태에서 기존 row reference를 그대로 조회해야 한다.
             Assert.AreSame(valueA1, package.Read<TestDataA>("A1"));
             Assert.AreSame(valueB1, package.Read<TestDataB>("B1"));
+            Assert.Throws<KeyNotFoundException>(() => package.Read<TestDataA>("missing"));
+            Assert.IsNull(package.TryRead<TestDataA>("missing"));
 
             // 동일 타입 재등록 실패가 이미 공개된 두 Table 상태를 훼손하면 안 된다.
             Assert.Throws<InvalidOperationException>
             (
                 () => package.AddTable<TestTableA, TestDataA>
                 (
-                    CreateTableA(new TestDataA { Key = "A2", Value = 999 })
+                    CreateTableA
+                    (
+                        new TestDataA
+                        {
+                            Key = "A2",
+                            Value = 999
+                        }
+                    )
                 )
             );
 
@@ -241,14 +272,14 @@ namespace inonego.Xeri.Data.TEST._DataPackage
 
     #endregion
 
-    #region D-1: 다중 Source 조회와 제거
+    #region Source 등록 및 변경
 
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         /// <summary>
         /// <br/> 서로 다른 Source의 같은 타입 데이터를 함께 조회하고 REF로 소비한 뒤,
         /// <br/> Source 제거에 따라 해당 데이터만 순차적으로 사라지는 흐름을 검증한다.
         /// </summary>
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         [Test]
         public void TEST_DataPackage_Source_추가_REF_조회_제거_흐름()
         {
@@ -256,9 +287,21 @@ namespace inonego.Xeri.Data.TEST._DataPackage
             var sourceA = CreateSource("a.xml");
             var sourceB = CreateSource("b.xml");
 
-            var valueA1 = new TestDataA { Key = "A1", Value = 100 };
-            var valueA2 = new TestDataA { Key = "A2", Value = 200 };
-            var valueB1 = new TestDataA { Key = "B1", Value = 300 };
+            var valueA1 = new TestDataA
+            {
+                Key = "A1",
+                Value = 100
+            };
+            var valueA2 = new TestDataA
+            {
+                Key = "A2",
+                Value = 200
+            };
+            var valueB1 = new TestDataA
+            {
+                Key = "B1",
+                Value = 300
+            };
 
             package.AddSource(sourceA, CreateTableA(valueA1, valueA2));
             package.AddSource(sourceB, CreateTableA(valueB1));
@@ -273,6 +316,8 @@ namespace inonego.Xeri.Data.TEST._DataPackage
             Assert.AreSame(valueA2, package.Table<TestDataA>().Dictionary["A2"]);
             Assert.AreSame(valueA1, refA1.ToValue());
             Assert.AreSame(valueB1, refB1.ToValue());
+            Assert.Throws<KeyNotFoundException>(() => package.Read<TestDataA>("missing"));
+            Assert.IsNull(package.TryRead<TestDataA>("missing"));
 
             // Source A 제거 후 A의 값만 사라지고 Source B의 값은 계속 조회되어야 한다.
             package.RemoveSource(sourceA);
@@ -288,10 +333,6 @@ namespace inonego.Xeri.Data.TEST._DataPackage
             Assert.Throws<InvalidOperationException>(() => package.Table<TestDataA>());
         }
 
-    #endregion
-
-    #region D-2: Source 교체와 REF 재해석
-
         // --------------------------------------------------------------------------------
         /// <summary>
         /// <br/> Source reload 뒤 기존 REF가 새 row를 해석하고 ValueType 구성도 갱신되며,
@@ -305,22 +346,46 @@ namespace inonego.Xeri.Data.TEST._DataPackage
             var sourceA = CreateSource("a.xml");
             var sourceB = CreateSource("b.xml");
 
-            var valueA1Old = new TestDataA { Key = "A1", Value = 100 };
-            var valueA2    = new TestDataA { Key = "A2", Value = 200 };
-            var valueB1    = new TestDataA { Key = "B1", Value = 300 };
+            var valueA1Old = new TestDataA
+            {
+                Key = "A1",
+                Value = 100
+            };
+            var valueA2 = new TestDataA
+            {
+                Key = "A2",
+                Value = 200
+            };
+            var valueB1 = new TestDataA
+            {
+                Key = "B1",
+                Value = 300
+            };
 
             package.AddSource(sourceA, CreateTableA(valueA1Old, valueA2));
             package.AddSource(sourceB, CreateTableA(valueB1));
             DataPackage.Register(package);
 
-            var refA1     = new REF<TestDataA>("A1");
-            var refA2     = new REF<TestDataA>("A2");
-            var refB1     = new REF<TestDataA>("B1");
+            var refA1 = new REF<TestDataA>("A1");
+            var refA2 = new REF<TestDataA>("A2");
+            var refB1 = new REF<TestDataA>("B1");
             var refTypeB1 = new REF<TestDataB>("A1");
 
-            var valueA1New = new TestDataA { Key = "A1", Value = 500 };
-            var valueA3    = new TestDataA { Key = "A3", Value = 400 };
-            var valueTypeB1 = new TestDataB { Key = "A1", Value = "B1" };
+            var valueA1New = new TestDataA
+            {
+                Key = "A1",
+                Value = 500
+            };
+            var valueA3 = new TestDataA
+            {
+                Key = "A3",
+                Value = 400
+            };
+            var valueTypeB1 = new TestDataB
+            {
+                Key = "A1",
+                Value = "B1"
+            };
 
             package.ReplaceSource
             (
@@ -339,7 +404,11 @@ namespace inonego.Xeri.Data.TEST._DataPackage
             Assert.AreSame(valueTypeB1, refTypeB1.ToValue());
             Assert.AreSame(valueA3, package.Read<TestDataA>("A3"));
 
-            var valueTypeB2 = new TestDataB { Key = "A1", Value = "B2" };
+            var valueTypeB2 = new TestDataB
+            {
+                Key = "A1",
+                Value = "B2"
+            };
 
             // Source A가 더 이상 A 타입을 제공하지 않아도 Source B의 A lookup은 유지되어야 한다.
             package.ReplaceSource(sourceA, CreateTableB(valueTypeB2));
@@ -352,14 +421,14 @@ namespace inonego.Xeri.Data.TEST._DataPackage
 
     #endregion
 
-    #region D-3: Source 재구성 실패 롤백
+    #region Source 충돌 및 상태 보존
 
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         /// <summary>
         /// <br/> 동일 Source 재추가와 다른 Source Key 충돌이 실패했을 때,
         /// <br/> 이미 공개된 lookup과 REF 결과가 기존 상태를 유지하는지 검증한다.
         /// </summary>
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         [Test]
         public void TEST_DataPackage_Source_재구성_실패_기존_상태_유지()
         {
@@ -367,8 +436,16 @@ namespace inonego.Xeri.Data.TEST._DataPackage
             var sourceA = CreateSource("a.xml");
             var sourceB = CreateSource("b.xml");
 
-            var valueA1 = new TestDataA { Key = "A1", Value = 100 };
-            var valueB1 = new TestDataA { Key = "B1", Value = 200 };
+            var valueA1 = new TestDataA
+            {
+                Key = "A1",
+                Value = 100
+            };
+            var valueB1 = new TestDataA
+            {
+                Key = "B1",
+                Value = 200
+            };
 
             package.AddSource(sourceA, CreateTableA(valueA1));
             package.AddSource(sourceB, CreateTableA(valueB1));
@@ -383,7 +460,15 @@ namespace inonego.Xeri.Data.TEST._DataPackage
                 () => package.AddSource
                 (
                     sourceA,
-                    CreateTableA(new TestDataA { Key = "A2", Value = 999 })
+
+                    CreateTableA
+                    (
+                        new TestDataA
+                        {
+                            Key = "A2",
+                            Value = 999
+                        }
+                    )
                 )
             );
 
@@ -396,10 +481,20 @@ namespace inonego.Xeri.Data.TEST._DataPackage
                 () => package.ReplaceSource
                 (
                     sourceA,
+
                     CreateTableA
                     (
-                        new TestDataA { Key = "A2", Value = 300 },
-                        new TestDataA { Key = "B1", Value = 400 }
+                        new TestDataA
+                        {
+                            Key = "A2",
+                            Value = 300
+                        },
+
+                        new TestDataA
+                        {
+                            Key = "B1",
+                            Value = 400
+                        }
                     )
                 )
             );
@@ -409,10 +504,6 @@ namespace inonego.Xeri.Data.TEST._DataPackage
             Assert.IsNull(package.TryRead<TestDataA>("A2"));
             Assert.AreEqual(2, package.Table<TestDataA>().Count);
         }
-
-    #endregion
-
-    #region D-4: 직접 Table과 Source 구성 경계
 
         // --------------------------------------------------------------------------------
         /// <summary>
@@ -427,8 +518,16 @@ namespace inonego.Xeri.Data.TEST._DataPackage
             var sourcePackage = new DataPackage();
             var source = CreateSource("a.xml");
 
-            var valueA1 = new TestDataA { Key = "A1", Value = 10 };
-            var valueA2 = new TestDataA { Key = "A2", Value = 20 };
+            var valueA1 = new TestDataA
+            {
+                Key = "A1",
+                Value = 10
+            };
+            var valueA2 = new TestDataA
+            {
+                Key = "A2",
+                Value = 20
+            };
 
             directPackage.AddTable<TestTableA, TestDataA>(CreateTableA(valueA1));
 
@@ -455,7 +554,449 @@ namespace inonego.Xeri.Data.TEST._DataPackage
 
     #endregion
 
-    #region S-1: Scope와 REF 컨텍스트 전환
+    #region Source 조회 및 Table View
+
+        // ----------------------------------------------------------------------
+        /// <summary>
+        /// <br/> Type/Key별 Source 역조회와 기존 제네릭/비제네릭 Table View가
+        /// <br/> 동일한 Row 참조를 노출하는지 검증한다.
+        /// </summary>
+        // ----------------------------------------------------------------------
+        [Test]
+        public void TEST_DataPackage_Source_소유자_조회_및_Table_View_호환()
+        {
+            var package = new DataPackage();
+            var sourceA = CreateSource("a.xml");
+            var sourceB = CreateSource("b.xml");
+            var valueA = new TestDataA
+            {
+                Key = "shared",
+                Value = 100
+            };
+            var valueB = new TestDataB
+            {
+                Key = "shared",
+                Value = "B"
+            };
+            var other = new TestDataA
+            {
+                Key = "other",
+                Value = 200
+            };
+
+            package.AddSource
+            (
+                sourceA,
+                new ITable[]
+                {
+                    CreateTableA(valueA),
+                    CreateTableB(valueB)
+                }
+            );
+            package.AddSource(sourceB, CreateTableA(other));
+
+            Assert.IsTrue(package.TryFindSource<TestDataA>("shared", out var ownerA));
+            Assert.AreEqual(sourceA, ownerA);
+            Assert.IsTrue(package.TryFindSource<TestDataB>("shared", out var ownerB));
+            Assert.AreEqual(sourceA, ownerB);
+            Assert.IsTrue(package.TryFindSource<TestDataA>("other", out var otherOwner));
+            Assert.AreEqual(sourceB, otherOwner);
+            Assert.IsFalse(package.TryFindSource<TestDataB>("other", out var missingOwner));
+            Assert.AreEqual(default(DataPackage.Source), missingOwner);
+
+            var typed = package.Table<TestDataA>();
+            var nonGeneric = package.Table(typeof(TestDataA));
+
+            Assert.AreSame(valueA, package.Read<TestDataA>("shared"));
+            Assert.AreSame(valueA, typed.Dictionary["shared"]);
+            Assert.AreSame(other, typed.Dictionary["other"]);
+            Assert.IsTrue(typed.Dictionary.TryGetValue("shared", out var found));
+            Assert.AreSame(valueA, found);
+            Assert.AreSame(valueA, nonGeneric["shared"]);
+            Assert.AreEqual(2, typed.Count);
+            Assert.AreEqual(2, nonGeneric.Count);
+
+            var typedValues = 0;
+            foreach (var value in typed.Values)
+            {
+                Assert.AreSame(package.Read<TestDataA>(value.Key), value);
+                typedValues++;
+            }
+
+            Assert.AreEqual(2, typedValues);
+
+            var values = 0;
+            foreach (var value in nonGeneric.Values)
+            {
+                Assert.AreSame(package.Read<TestDataA>(value.Key), value);
+                values++;
+            }
+
+            Assert.AreEqual(2, values);
+
+            var seen = 0;
+            foreach (var pair in nonGeneric)
+            {
+                Assert.AreSame(package.Read<TestDataA>(pair.Key), pair.Value);
+                seen++;
+            }
+
+            Assert.AreEqual(2, seen);
+        }
+
+    #endregion
+
+    #region Source 교체 및 등록본 정합성
+
+        // ----------------------------------------------------------------------
+        /// <summary>
+        /// <br/> 실패한 교체는 기존 Row/Source를 유지하고, 성공한 교체와 제거는
+        /// <br/> 이전 Key의 소유권을 남기지 않는지 검증한다.
+        /// </summary>
+        // ----------------------------------------------------------------------
+        [Test]
+        public void TEST_DataPackage_Source_교체_제거_충돌_출처_원자성()
+        {
+            var package = new DataPackage();
+            var sourceA = CreateSource("a.xml");
+            var sourceB = CreateSource("b.xml");
+            var original = new TestDataA
+            {
+                Key = "A1",
+                Value = 10
+            };
+            var other = new TestDataA
+            {
+                Key = "B1",
+                Value = 20
+            };
+
+            package.AddSource(sourceA, CreateTableA(original));
+            package.AddSource(sourceB, CreateTableA(other));
+            var previousTable = package.Table<TestDataA>();
+
+            Assert.Throws<InvalidOperationException>
+            (
+                () => package.ReplaceSource
+                (
+                    sourceA,
+                    CreateTableA
+                    (
+                        new TestDataA
+                        {
+                            Key = "B1",
+                            Value = 999
+                        }
+                    )
+                )
+            );
+
+            Assert.AreSame(original, package.Read<TestDataA>("A1"));
+            Assert.IsTrue(package.TryFindSource<TestDataA>("A1", out var owner));
+            Assert.AreEqual(sourceA, owner);
+            Assert.IsTrue(package.TryFindSource<TestDataA>("B1", out owner));
+            Assert.AreEqual(sourceB, owner);
+
+            var replacement = new TestDataA
+            {
+                Key = "A2",
+                Value = 30
+            };
+            package.ReplaceSource(sourceA, CreateTableA(replacement));
+
+            // 이전 View는 교체 전 Value Dictionary를 계속 참조한다.
+            Assert.AreSame(original, previousTable["A1"]);
+            Assert.IsNull(previousTable["A2"]);
+            Assert.AreEqual(2, previousTable.Count);
+            Assert.AreSame(replacement, package.Table<TestDataA>()["A2"]);
+
+            Assert.IsNull(package.TryRead<TestDataA>("A1"));
+            Assert.IsFalse(package.TryFindSource<TestDataA>("A1", out owner));
+            Assert.AreEqual(default(DataPackage.Source), owner);
+            Assert.AreSame(replacement, package.Read<TestDataA>("A2"));
+            Assert.IsTrue(package.TryFindSource<TestDataA>("A2", out owner));
+            Assert.AreEqual(sourceA, owner);
+
+            package.RemoveSource(sourceB);
+            Assert.IsFalse(package.TryFindSource<TestDataA>("B1", out _));
+
+            var returned = new TestDataA
+            {
+                Key = "A1",
+                Value = 40
+            };
+
+            package.AddSource(sourceB, CreateTableA(returned));
+            Assert.IsTrue(package.TryFindSource<TestDataA>("A1", out owner));
+            Assert.AreEqual(sourceB, owner);
+
+            package.RemoveSource(sourceA);
+            Assert.IsFalse(package.TryFindSource<TestDataA>("A2", out _));
+            Assert.IsTrue(package.TryFindSource<TestDataA>("A1", out owner));
+            Assert.AreEqual(sourceB, owner);
+        }
+
+        // --------------------------------------------------------------------------------
+        /// <summary>
+        /// <br/> Source 등록 및 교체 뒤 원본 Table의 Key·Row 매핑을 변경해도
+        /// <br/> 다른 Source의 추가·제거 시 등록된 Source 조회 상태가 유지되는지 검증한다.
+        /// </summary>
+        // --------------------------------------------------------------------------------
+        [Test]
+        public void TEST_DataPackage_Source_등록후_원본_Table_변경_격리()
+        {
+            var package = new DataPackage();
+            var sourceA = CreateSource("a.xml");
+            var sourceB = CreateSource("b.xml");
+            var sourceC = CreateSource("c.xml");
+            var originalA = new TestDataA
+            {
+                Key = "A",
+                Value = 10
+            };
+            var originalB = new TestDataA
+            {
+                Key = "B",
+                Value = 20
+            };
+            var tableA = CreateTableA(originalA, originalB);
+
+            package.AddSource(sourceA, tableA);
+
+            // 등록된 Source의 Key·Value 매핑은 입력 Table의 이후 변경과 분리된다.
+            tableA.Dictionary["A"] = new TestDataA
+            {
+                Key = "A",
+                Value = 999
+            };
+            tableA.Dictionary.Remove("B");
+            var added = new TestDataA
+            {
+                Key = "C",
+                Value = 30
+            };
+            var other = new TestDataA
+            {
+                Key = "D",
+                Value = 40
+            };
+
+            tableA.Add(added);
+            package.AddSource(sourceB, CreateTableA(other));
+
+            Assert.AreSame(originalA, package.Read<TestDataA>("A"));
+            Assert.AreSame(originalB, package.Read<TestDataA>("B"));
+            Assert.IsNull(package.TryRead<TestDataA>("C"));
+            Assert.IsTrue(package.TryFindSource<TestDataA>("B", out var owner));
+            Assert.AreEqual(sourceA, owner);
+
+            // 원본에서 삭제한 Key도 Source 등록에는 남으므로 새 Source가 소유할 수 없다.
+            var conflicting = new TestDataA
+            {
+                Key = "B",
+                Value = 50
+            };
+            Assert.Throws<InvalidOperationException>
+            (
+                () => package.AddSource(sourceC, CreateTableA(conflicting))
+            );
+
+            var replacement = new TestDataA
+            {
+                Key = "E",
+                Value = 60
+            };
+            var replacementTable = CreateTableA(replacement);
+
+            package.ReplaceSource(sourceA, replacementTable);
+            replacementTable.Dictionary.Clear();
+            package.RemoveSource(sourceB);
+
+            Assert.IsNull(package.TryRead<TestDataA>("A"));
+            Assert.IsNull(package.TryRead<TestDataA>("B"));
+            Assert.AreSame(replacement, package.Read<TestDataA>("E"));
+            Assert.IsTrue(package.TryFindSource<TestDataA>("E", out owner));
+            Assert.AreEqual(sourceA, owner);
+
+            // 등록 당시 Key와 Row 식별자가 다른 입력은 상태 변경 전에 거부한다.
+            var invalidValue = new TestDataA
+            {
+                Key = "valid",
+                Value = 70
+            };
+            var invalidTable = CreateTableA(invalidValue);
+            invalidValue.Key = "changed";
+            Assert.Throws<InvalidOperationException>
+            (
+                () => package.AddSource(sourceC, invalidTable)
+            );
+            Assert.IsFalse(package.HasSource(sourceC));
+        }
+
+    #endregion
+
+    #region Source 재로드 수명 및 세대
+
+        // ------------------------------------------------------------
+        /// <summary>
+        /// <br/> 만료된 Source 재로드는 외부 Table을 열거하지 않고 거부하며,
+        /// <br/> 현재 Source 조회 결과를 유지하는지 검증한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        [Test]
+        public void TEST_DataPackage_Source_만료된_재로드_입력_열거_생략()
+        {
+            var package = new DataPackage();
+            var source = CreateSource("reload.xml");
+            var original = new TestDataA
+            {
+                Key = "A",
+                Value = 10
+            };
+            package.AddSource(source, CreateTableA(original));
+
+            var registration = package.SourceRegistration(source);
+            var staleGeneration = package.SourceGeneration(source);
+            var latest = new TestDataA
+            {
+                Key = "A",
+                Value = 20
+            };
+            package.ReplaceSource(source, CreateTableA(latest));
+
+            var enumerationCount = 0;
+            IEnumerable<ITable> StaleTables()
+            {
+                enumerationCount++;
+                var stale = new TestDataA
+                {
+                    Key = "A",
+                    Value = 99
+                };
+                yield return CreateTableA(stale);
+            }
+
+            Assert.IsFalse(package.TryReplaceSource(source, registration, staleGeneration, StaleTables()));
+            Assert.IsFalse(package.TryReplaceSource(source, registration, staleGeneration, null));
+            Assert.AreEqual(0, enumerationCount);
+            Assert.AreEqual(20, package.Read<TestDataA>("A").Value);
+        }
+
+        // ----------------------------------------------------------------------
+        /// <summary>
+        /// <br/> 재로드 입력을 준비하는 동안 다른 교체가 발생하면 이전 결과를 거부하고,
+        /// <br/> 마지막으로 공개된 Source 상태를 보존하는지 검증한다.
+        /// </summary>
+        // ----------------------------------------------------------------------
+        [Test]
+        public void TEST_DataPackage_Source_재로드_열거중_세대_변경_거부()
+        {
+            var package = new DataPackage();
+            var source = CreateSource("reload.xml");
+            var original = new TestDataA
+            {
+                Key = "A",
+                Value = 10
+            };
+            package.AddSource(source, CreateTableA(original));
+
+            var registration = package.SourceRegistration(source);
+            var generation = package.SourceGeneration(source);
+            IEnumerable<ITable> SupersededTables()
+            {
+                var latest = new TestDataA
+                {
+                    Key = "A",
+                    Value = 30
+                };
+                package.ReplaceSource(source, CreateTableA(latest));
+                var stale = new TestDataA
+                {
+                    Key = "A",
+                    Value = 99
+                };
+                yield return CreateTableA(stale);
+            }
+
+            Assert.IsFalse(package.TryReplaceSource(source, registration, generation, SupersededTables()));
+            Assert.AreEqual(30, package.Read<TestDataA>("A").Value);
+        }
+
+    #endregion
+
+    #region REF 및 슬롯 Registry
+
+        // ----------------------------------------------------------------------
+        /// <summary>
+        /// <br/> REF는 Source를 보관하지 않고 현재 Scope의 Package에서 찾으며,
+        /// <br/> 직접 참조와 직접 등록 Table에는 출처가 없는지 검증한다.
+        /// </summary>
+        // ----------------------------------------------------------------------
+        [Test]
+        public void TEST_DataPackage_REF_Source_현재_Scope_및_Direct_구분()
+        {
+            var packageA = new DataPackage();
+            var packageB = new DataPackage();
+            var directPackage = new DataPackage();
+            var sourceA = CreateSource("a.xml");
+            var sourceB = CreateSource("b.xml");
+            var directRow = new TestDataA
+            {
+                Key = "A1",
+                Value = 1
+            };
+            var reference = new REF<TestDataA>("A1");
+            var directReference = new REF<TestDataA>(directRow);
+            var emptyReference = default(REF<TestDataA>);
+
+            Assert.IsFalse(reference.TryFindSource(out _));
+            Assert.IsFalse(emptyReference.TryFindSource(out _));
+
+            var sourceValueA = new TestDataA
+            {
+                Key = "A1",
+                Value = 10
+            };
+            var sourceValueB = new TestDataA
+            {
+                Key = "A1",
+                Value = 20
+            };
+
+            packageA.AddSource(sourceA, CreateTableA(sourceValueA));
+            packageB.AddSource(sourceB, CreateTableA(sourceValueB));
+            directPackage.AddTable<TestTableA, TestDataA>(CreateTableA(directRow));
+
+            DataPackage.Register("A", packageA);
+            DataPackage.Register("B", packageB);
+            DataPackage.Register("DIRECT", directPackage);
+
+            using (DataPackage.Scope("A"))
+            {
+                Assert.IsTrue(reference.TryFindSource(out var owner));
+                Assert.AreEqual(sourceA, owner);
+                Assert.IsFalse(directReference.TryFindSource(out _));
+
+                using (DataPackage.Scope("B"))
+                {
+                    Assert.IsTrue(reference.TryFindSource(out owner));
+                    Assert.AreEqual(sourceB, owner);
+                }
+
+                Assert.IsTrue(reference.TryFindSource(out owner));
+                Assert.AreEqual(sourceA, owner);
+            }
+
+            using (DataPackage.Scope("DIRECT"))
+            {
+                Assert.AreSame(directRow, reference.ToValue());
+                Assert.IsFalse(directPackage.TryFindSource<TestDataA>("A1", out _));
+                Assert.IsFalse(reference.TryFindSource(out _));
+                Assert.IsFalse(directReference.TryFindSource(out _));
+            }
+
+            Assert.IsFalse(reference.TryFindSource(out _));
+        }
 
         // --------------------------------------------------------------------------------
         /// <summary>
@@ -471,11 +1012,25 @@ namespace inonego.Xeri.Data.TEST._DataPackage
 
             packageA.AddTable<TestTableA, TestDataA>
             (
-                CreateTableA(new TestDataA { Key = "A1", Value = 100 })
+                CreateTableA
+                (
+                    new TestDataA
+                    {
+                        Key = "A1",
+                        Value = 100
+                    }
+                )
             );
             packageB.AddTable<TestTableA, TestDataA>
             (
-                CreateTableA(new TestDataA { Key = "A1", Value = 200 })
+                CreateTableA
+                (
+                    new TestDataA
+                    {
+                        Key = "A1",
+                        Value = 200
+                    }
+                )
             );
 
             DataPackage.Register("A", packageA);
@@ -500,9 +1055,27 @@ namespace inonego.Xeri.Data.TEST._DataPackage
             Assert.IsNull(refA1.ToValue());
         }
 
-    #endregion
+        // ----------------------------------------------------------------------
+        /// <summary>
+        /// <br/> Named 인덱서는 지정 슬롯을 읽기 전용 DataPackage로 반환하고,
+        /// <br/> 현재 Scope를 바꾸지 않는지 검증한다.
+        /// </summary>
+        // ----------------------------------------------------------------------
+        [Test]
+        public void TEST_DataPackage_Named_슬롯_조회_계약()
+        {
+            var package = new DataPackage();
+            var other = new DataPackage();
+            DataPackage.Register("GAME", package);
+            DataPackage.Register("OTHER", other);
 
-    #region S-2: Registry 변경 이벤트 흐름
+            using (DataPackage.Scope("OTHER"))
+            {
+                IReadOnlyDataPackage namedPackage = DataPackage.Named["GAME"];
+                Assert.AreSame(package, namedPackage);
+                Assert.AreSame(other, DataPackage.Current);
+            }
+        }
 
         // --------------------------------------------------------------------------------
         /// <summary>

@@ -41,14 +41,14 @@ Direct Table ──────────────────────�
                                       Read / TryRead / Table
 ```
 
-Source별 원본 Table은 보존되고, 같은 ValueType의 여러 Source는 하나의 logical Table처럼 조회됩니다.
+Source 등록·교체 시 외부 Table의 Key→Row 매핑을 복사해 보관하며, 같은 ValueType의 여러 Source를 하나의 logical Table처럼 조회합니다. Row 객체 참조는 공유하므로 등록 후 Row의 Key와 내부 값은 변경하지 않는 계약입니다.
 
 ## 슬롯과 Scope
 
 `DataPackage`는 `InstanceRegistry<DataPackage>`를 사용합니다.
 
 - `Current`: 현재 컨텍스트 슬롯의 읽기 전용 패키지
-- `Named[slot]`: 이름으로 직접 접근
+- `Named[slot]`: Scope와 무관하게 지정 슬롯의 `IReadOnlyDataPackage` 조회
 - `Scope(slot)`: `using` 범위 동안 현재 슬롯 전환 후 자동 복원
 - `OpenScope` / `CloseScope`: 수동 Scope 관리
 
@@ -66,7 +66,7 @@ Source별 원본 Table은 보존되고, 같은 ValueType의 여러 Source는 하
 
 `DataPackage.Source`는 `(Provider, Location)`으로 외부 데이터 공급 단위를 식별합니다.
 
-`AddSource`, `RemoveSource`, `ReplaceSource`는 영향받는 ValueType lookup을 먼저 완성한 뒤 현재 상태를 교체합니다. 중간 검증 실패로 부분 lookup이 공개되지 않도록 구성되어 있습니다.
+`AddSource`, `RemoveSource`, `ReplaceSource`는 영향받는 ValueType lookup을 먼저 완성한 뒤 현재 상태를 교체합니다. 외부 Table의 Key·Row 매핑 복사는 Package 잠금 밖에서 수행하고, 등록 상태 검증과 Lookup 공개는 잠금 안에서 처리합니다. 중간 검증 실패로 부분 lookup이 공개되지 않도록 구성되어 있습니다. 재로드 필요 상태는 단순 `ReplaceSource()`로 해제되지 않고, 등록·세대가 유효한 재로드 결과가 성공적으로 적용되어야 해제됩니다. 만료된 재로드 요청은 입력 Table을 열거하기 전에 거부하며, Table 준비 중 Source가 교체되면 공개 직전에 다시 검사해 오래된 결과를 버립니다.
 
 Source-backed table은 `RemoveTable()`로 직접 제거할 수 없고 Source 단위 API로 제거해야 합니다.
 
