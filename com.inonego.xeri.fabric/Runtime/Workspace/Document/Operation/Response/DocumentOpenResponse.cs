@@ -10,128 +10,146 @@ using System;
 
 namespace inonego.Xeri.Workspace.Document
 {
-   // ============================================================
-   /// <summary>
-   /// 문서 열기 성공 결과의 세부 종류.
-   /// </summary>
-   // ============================================================
-   public enum DocumentOpenKind
-   {
-      None        = 0,
-      NewSession  = 1,
-      AlreadyOpen = 2,
-   }
+    // ============================================================
+    /// <summary>
+    /// 문서 열기 성공 결과의 세부 종류.
+    /// </summary>
+    // ============================================================
+    public enum DocumentOpenKind
+    {
 
-   // ============================================================
-   /// <summary>
-   /// 문서 열기 요청 결과.
-   /// </summary>
-   // ============================================================
-   public readonly struct DocumentOpenResponse
-   {
-      
-   #region 필드
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 열기 결과가 지정되지 않은 상태입니다.
+        /// </summary>
+        // ------------------------------------------------------------
+        None = 0,
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 문서 열기 성공 여부.
-      /// </summary>
-      // ------------------------------------------------------------
-      public bool Success { get; }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 새 문서 세션을 생성한 결과입니다.
+        /// </summary>
+        // ------------------------------------------------------------
+        NewSession = 1,
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 문서 열기 성공 시 session이 확보된 방식.
-      /// </summary>
-      // ------------------------------------------------------------
-      public DocumentOpenKind Kind { get; }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 이미 열린 세션을 반환한 결과입니다.
+        /// </summary>
+        // ------------------------------------------------------------
+        AlreadyOpen = 2,
+    }
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 열기에 성공했을 때 생성된 문서 세션.
-      /// </summary>
-      // ------------------------------------------------------------
-      public IDocumentSession Session { get; }
+    // ============================================================
+    /// <summary>
+    /// 문서 열기 요청 결과.
+    /// </summary>
+    // ============================================================
+    public readonly struct DocumentOpenResponse
+    {
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 열기에 실패했을 때 사용할 실패 메시지.
-      /// </summary>
-      // ------------------------------------------------------------
-      public string Error { get; }
+    #region 필드
 
-   #endregion
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 문서 열기 성공 여부.
+        /// </summary>
+        // ------------------------------------------------------------
+        public bool Success { get; }
 
-   #region 생성자
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 문서 열기 성공 시 session이 확보된 방식.
+        /// </summary>
+        // ------------------------------------------------------------
+        public DocumentOpenKind Kind { get; }
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 문서 열기 응답을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      private DocumentOpenResponse
-      (
-         bool success,
-         DocumentOpenKind kind,
-         IDocumentSession session,
-         string error
-      ) : this()
-      {
-         Success  = success;
-         Kind     = kind;
-         Session  = session;
-         Error    = error ?? "";
-      }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 열기에 성공했을 때 생성된 문서 세션.
+        /// </summary>
+        // ------------------------------------------------------------
+        public IDocumentSession Session { get; }
 
-   #endregion
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 열기에 실패했을 때 사용할 실패 메시지.
+        /// </summary>
+        // ------------------------------------------------------------
+        public string Error { get; }
 
-   #region 메서드
+    #endregion
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 성공 응답을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public static DocumentOpenResponse Succeed(IDocumentSession session)
-      {
-         return Succeed(session, DocumentOpenKind.NewSession);
-      }
+    #region 생성자
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 성공 응답을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public static DocumentOpenResponse Succeed
-      (
-         IDocumentSession session,
-         DocumentOpenKind kind
-      )
-      {
-         if (session == null)
-         {
-            throw new ArgumentNullException(nameof(session));
-         }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 문서 열기 응답을 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        private DocumentOpenResponse
+        (
+            bool success,
+            DocumentOpenKind kind,
+            IDocumentSession session,
+            string error
+        ) : this()
+        {
+            Success = success;
+            Kind = kind;
+            Session = session;
+            Error = error ?? "";
+        }
 
-         if (kind == DocumentOpenKind.None)
-         {
-            throw new ArgumentException("문서 열기 성공 종류가 지정되지 않았습니다.", nameof(kind));
-         }
+    #endregion
 
-         return new DocumentOpenResponse(true, kind, session, "");
-      }
+    #region 메서드
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 실패 응답을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public static DocumentOpenResponse Fail(string error)
-      {
-         return new DocumentOpenResponse(false, DocumentOpenKind.None, null, error);
-      }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 성공 응답을 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public static DocumentOpenResponse Succeed(IDocumentSession session)
+        {
+            return Succeed(session, DocumentOpenKind.NewSession);
+        }
 
-   #endregion
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 성공 응답을 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public static DocumentOpenResponse Succeed
+        (
+            IDocumentSession session,
+            DocumentOpenKind kind
+        )
+        {
+            if (session == null)
+            {
+                throw new ArgumentNullException(nameof(session));
+            }
 
-   }
+            if (kind == DocumentOpenKind.None)
+            {
+                throw new ArgumentException("문서 열기 성공 종류가 지정되지 않았습니다.", nameof(kind));
+            }
+
+            return new DocumentOpenResponse(true, kind, session, "");
+        }
+
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 실패 응답을 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public static DocumentOpenResponse Fail(string error)
+        {
+            return new DocumentOpenResponse(false, DocumentOpenKind.None, null, error);
+        }
+
+    #endregion
+
+    }
 }

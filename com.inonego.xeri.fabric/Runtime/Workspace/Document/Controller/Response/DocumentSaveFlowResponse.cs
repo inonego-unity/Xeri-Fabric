@@ -10,151 +10,169 @@ using System;
 
 namespace inonego.Xeri.Workspace.Document
 {
-   // ============================================================
-   /// <summary>
-   /// 사용자-facing 문서 저장 흐름 결과.
-   /// </summary>
-   // ============================================================
-   public enum DocumentSaveFlowKind
-   {
-      Failed  = 0,
-      Saved   = 1,
-      NeedLoc = 2,
-   }
+    // ============================================================
+    /// <summary>
+    /// 사용자-facing 문서 저장 흐름 결과.
+    /// </summary>
+    // ============================================================
+    public enum DocumentSaveFlowKind
+    {
 
-   // ============================================================
-   /// <summary>
-   /// 사용자-facing 문서 저장 흐름 응답.
-   /// </summary>
-   // ============================================================
-   public readonly struct DocumentSaveFlowResponse
-   {
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 문서 저장에 실패한 결과입니다.
+        /// </summary>
+        // ------------------------------------------------------------
+        Failed = 0,
 
-   #region 필드
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 문서 저장이 완료된 결과입니다.
+        /// </summary>
+        // ------------------------------------------------------------
+        Saved = 1,
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 사용자-facing 문서 저장 흐름 응답 종류.
-      /// </summary>
-      // ------------------------------------------------------------
-      public DocumentSaveFlowKind Kind { get; }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 저장 위치가 추가로 필요한 결과입니다.
+        /// </summary>
+        // ------------------------------------------------------------
+        NeedLoc = 2,
+    }
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 흐름 결과와 연결된 작업 대상 document session.
-      /// </summary>
-      // ------------------------------------------------------------
-      public IDocumentSession Session { get; }
+    // ============================================================
+    /// <summary>
+    /// 사용자-facing 문서 저장 흐름 응답.
+    /// </summary>
+    // ============================================================
+    public readonly struct DocumentSaveFlowResponse
+    {
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 실패했을 때 사용할 실패 메시지.
-      /// </summary>
-      // ------------------------------------------------------------
-      public string Error { get; }
+    #region 필드
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 문서 저장 흐름이 저장 완료 상태인지 여부.
-      /// </summary>
-      // ------------------------------------------------------------
-      public bool Saved => Kind == DocumentSaveFlowKind.Saved;
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 사용자-facing 문서 저장 흐름 응답 종류.
+        /// </summary>
+        // ------------------------------------------------------------
+        public DocumentSaveFlowKind Kind { get; }
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 문서 저장 흐름이 실패했는지 여부.
-      /// </summary>
-      // ------------------------------------------------------------
-      public bool Failed => Kind == DocumentSaveFlowKind.Failed;
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 흐름 결과와 연결된 작업 대상 document session.
+        /// </summary>
+        // ------------------------------------------------------------
+        public IDocumentSession Session { get; }
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 문서 저장 흐름을 계속하려면 location 입력이 필요한지 여부.
-      /// </summary>
-      // ------------------------------------------------------------
-      public bool NeedLoc => Kind == DocumentSaveFlowKind.NeedLoc;
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 실패했을 때 사용할 실패 메시지.
+        /// </summary>
+        // ------------------------------------------------------------
+        public string Error { get; }
 
-   #endregion
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 문서 저장 흐름이 저장 완료 상태인지 여부.
+        /// </summary>
+        // ------------------------------------------------------------
+        public bool Saved => Kind == DocumentSaveFlowKind.Saved;
 
-   #region 생성자
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 문서 저장 흐름이 실패했는지 여부.
+        /// </summary>
+        // ------------------------------------------------------------
+        public bool Failed => Kind == DocumentSaveFlowKind.Failed;
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 문서 저장 흐름 응답을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      private DocumentSaveFlowResponse
-      (
-         DocumentSaveFlowKind kind,
-         IDocumentSession session,
-         string error
-      ) : this()
-      {
-         Kind    = kind;
-         Session = session;
-         Error   = error ?? "";
-      }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 문서 저장 흐름을 계속하려면 location 입력이 필요한지 여부.
+        /// </summary>
+        // ------------------------------------------------------------
+        public bool NeedLoc => Kind == DocumentSaveFlowKind.NeedLoc;
 
-   #endregion
+    #endregion
 
-   #region 메서드
+    #region 생성자
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 저장 완료 응답을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public static DocumentSaveFlowResponse Succeed(IDocumentSession session)
-      {
-         if (session == null)
-         {
-            throw new ArgumentNullException(nameof(session));
-         }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 문서 저장 흐름 응답을 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        private DocumentSaveFlowResponse
+        (
+            DocumentSaveFlowKind kind,
+            IDocumentSession session,
+            string error
+        ) : this()
+        {
+            Kind = kind;
+            Session = session;
+            Error = error ?? "";
+        }
 
-         return new DocumentSaveFlowResponse(DocumentSaveFlowKind.Saved, session, "");
-      }
+    #endregion
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 실패 응답을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public static DocumentSaveFlowResponse Fail(string error)
-      {
-         return new DocumentSaveFlowResponse(DocumentSaveFlowKind.Failed, null, error);
-      }
+    #region 메서드
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 대상 session을 유지하는 실패 응답을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public static DocumentSaveFlowResponse Fail(IDocumentSession session, string error)
-      {
-         if (session == null)
-         {
-            throw new ArgumentNullException(nameof(session));
-         }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 저장 완료 응답을 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public static DocumentSaveFlowResponse Succeed(IDocumentSession session)
+        {
+            if (session == null)
+            {
+                throw new ArgumentNullException(nameof(session));
+            }
 
-         return new DocumentSaveFlowResponse(DocumentSaveFlowKind.Failed, session, error);
-      }
+            return new DocumentSaveFlowResponse(DocumentSaveFlowKind.Saved, session, "");
+        }
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// Location 입력이 필요한 응답을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public static DocumentSaveFlowResponse RequireLoc(IDocumentSession session)
-      {
-         if (session == null)
-         {
-            throw new ArgumentNullException(nameof(session));
-         }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 실패 응답을 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public static DocumentSaveFlowResponse Fail(string error)
+        {
+            return new DocumentSaveFlowResponse(DocumentSaveFlowKind.Failed, null, error);
+        }
 
-         return new DocumentSaveFlowResponse(DocumentSaveFlowKind.NeedLoc, session, "");
-      }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 대상 session을 유지하는 실패 응답을 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public static DocumentSaveFlowResponse Fail(IDocumentSession session, string error)
+        {
+            if (session == null)
+            {
+                throw new ArgumentNullException(nameof(session));
+            }
 
-   #endregion
+            return new DocumentSaveFlowResponse(DocumentSaveFlowKind.Failed, session, error);
+        }
 
-   }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// Location 입력이 필요한 응답을 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public static DocumentSaveFlowResponse RequireLoc(IDocumentSession session)
+        {
+            if (session == null)
+            {
+                throw new ArgumentNullException(nameof(session));
+            }
+
+            return new DocumentSaveFlowResponse(DocumentSaveFlowKind.NeedLoc, session, "");
+        }
+
+    #endregion
+
+    }
 }

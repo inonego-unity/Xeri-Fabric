@@ -10,83 +10,83 @@ using System;
 
 namespace inonego.Xeri.Workspace.Document
 {
-   // ============================================================
-   /// <summary>
-   /// 문서 생성 요청 결과.
-   /// </summary>
-   // ============================================================
-   public readonly struct DocumentCreateResponse
-   {
-      
-   #region 필드
+    // ============================================================
+    /// <summary>
+    /// 문서 생성 요청 결과.
+    /// </summary>
+    // ============================================================
+    public readonly struct DocumentCreateResponse
+    {
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 문서 생성 성공 여부.
-      /// </summary>
-      // ------------------------------------------------------------
-      public bool Success { get; }
+    #region 필드
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 생성에 성공했을 때 생성된 문서 세션.
-      /// </summary>
-      // ------------------------------------------------------------
-      public IDocumentSession Session { get; }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 문서 생성 성공 여부.
+        /// </summary>
+        // ------------------------------------------------------------
+        public bool Success { get; }
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 생성에 실패했을 때 사용할 실패 메시지.
-      /// </summary>
-      // ------------------------------------------------------------
-      public string Error { get; }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 생성에 성공했을 때 생성된 문서 세션.
+        /// </summary>
+        // ------------------------------------------------------------
+        public IDocumentSession Session { get; }
 
-   #endregion
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 생성에 실패했을 때 사용할 실패 메시지.
+        /// </summary>
+        // ------------------------------------------------------------
+        public string Error { get; }
 
-   #region 생성자
+    #endregion
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 문서 생성 응답을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      private DocumentCreateResponse
-      (
-         bool success, IDocumentSession session, string error
-      ) : this()
-      {
-         Success = success;
-         Session = session;
-         Error   = error ?? "";
-      }
+    #region 생성자
 
-   #endregion
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 문서 생성 응답을 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        private DocumentCreateResponse
+        (
+            bool success, IDocumentSession session, string error
+        ) : this()
+        {
+            Success = success;
+            Session = session;
+            Error = error ?? "";
+        }
 
-   #region 메서드
+    #endregion
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 성공 응답을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public static DocumentCreateResponse Succeed(IDocumentSession session)
-      {
-         if (session == null)
-         {
-            throw new ArgumentNullException(nameof(session));
-         }
+    #region 메서드
 
-         return new DocumentCreateResponse(true, session, "");
-      }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 성공 응답을 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public static DocumentCreateResponse Succeed(IDocumentSession session)
+        {
+            if (session == null)
+            {
+                throw new ArgumentNullException(nameof(session));
+            }
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 실패 응답을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public static DocumentCreateResponse Fail(string error) => new DocumentCreateResponse(false, null, error);
+            return new DocumentCreateResponse(true, session, "");
+        }
 
-   #endregion
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 실패 응답을 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public static DocumentCreateResponse Fail(string error) => new DocumentCreateResponse(false, null, error);
 
-   }
+    #endregion
+
+    }
 }

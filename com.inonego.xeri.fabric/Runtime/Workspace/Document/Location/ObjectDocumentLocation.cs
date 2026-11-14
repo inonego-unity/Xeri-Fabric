@@ -13,141 +13,145 @@ using UnityEngine;
 
 namespace inonego.Xeri.Workspace.Document
 {
-   // ============================================================
-   /// <summary>
-   /// 이미 존재하는 객체 참조를 나타내는 문서 location.
-   /// </summary>
-   // ============================================================
-   [Serializable]
-   public sealed class ObjectDocumentLocation : IDocumentLocation
-   {
+    // ============================================================
+    /// <summary>
+    /// 이미 존재하는 객체 참조를 나타내는 문서 location.
+    /// </summary>
+    // ============================================================
+    [Serializable]
+    public sealed class ObjectDocumentLocation : IDocumentLocation
+    {
 
-   #region 필드
+    #region 필드
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 사용자에게 표시하거나 진단에 사용할 location 이름.
-      /// </summary>
-      // ------------------------------------------------------------
-      public string Name => name;
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 사용자에게 표시하거나 진단에 사용할 location 이름.
+        /// </summary>
+        // ------------------------------------------------------------
+        public string Name => name;
 
-      [SerializeField]
-      private string name = string.Empty;
+        [SerializeField]
+        private string name = string.Empty;
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 문서 location으로 사용할 객체 참조.
-      /// </summary>
-      // ------------------------------------------------------------
-      public object Value => value;
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 문서 location으로 사용할 객체 참조.
+        /// </summary>
+        // ------------------------------------------------------------
+        public object Value => value;
 
-      [SerializeReference]
-      private object value = null;
+        [SerializeReference]
+        private object value = null;
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 객체 참조의 런타임 타입.
-      /// </summary>
-      // ------------------------------------------------------------
-      public Type ObjectType => value?.GetType();
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 객체 참조의 런타임 타입.
+        /// </summary>
+        // ------------------------------------------------------------
+        public Type ObjectType => value?.GetType();
 
-   #endregion
+    #endregion
 
-   #region 생성자
+    #region 생성자
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 객체 이름 또는 타입 이름을 표시 이름으로 사용해 location을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public ObjectDocumentLocation(object value) : this(GetDefaultName(value), value) {}
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 객체 이름 또는 타입 이름을 표시 이름으로 사용해 location을 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public ObjectDocumentLocation(object value) : this(GetDefaultName(value), value)
+        {
+            // NONE
+        }
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 지정한 표시 이름과 객체 참조로 location을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public ObjectDocumentLocation(string name, object value) : base()
-      {
-         if (string.IsNullOrEmpty(name))
-         {
-            throw new ArgumentException("Object location 이름이 비어 있습니다.", nameof(name));
-         }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 지정한 표시 이름과 객체 참조로 location을 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public ObjectDocumentLocation(string name, object value) : base()
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                throw new ArgumentException("Object location 이름이 비어 있습니다.", nameof(name));
+            }
 
-         this.value = value ?? throw new ArgumentNullException(nameof(value));
-         this.name = name;
-      }
+            this.value = value ?? throw new ArgumentNullException(nameof(value));
+            this.name = name;
+        }
 
-   #endregion
+    #endregion
 
-   #region 메서드
+    #region 메서드
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// Object reference location은 object reference를 복구할 수 없으므로 기본 recovery record를 제공하지 않는다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public IDocumentLocationRecord Record()
-      {
-         return null;
-      }
+        // ----------------------------------------------------------------------
+        /// <summary>
+        /// <br/> Object reference location은 object reference를 복구할 수
+        /// <br/> 없으므로 기본 recovery record를 제공하지 않는다.
+        /// </summary>
+        // ----------------------------------------------------------------------
+        public IDocumentLocationRecord Record()
+        {
+            return null;
+        }
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 객체에서 기본 표시 이름을 계산한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      private static string GetDefaultName(object value)
-      {
-         if (value == null)
-         {
-            throw new ArgumentNullException(nameof(value));
-         }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 객체에서 기본 표시 이름을 계산한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        private static string GetDefaultName(object value)
+        {
+            if (value == null)
+            {
+                throw new ArgumentNullException(nameof(value));
+            }
 
-         if (value is UnityEngine.Object unityObject && string.IsNullOrEmpty(unityObject.name) == false)
-         {
-            return unityObject.name;
-         }
+            if (value is UnityEngine.Object unityObject && string.IsNullOrEmpty(unityObject.name) == false)
+            {
+                return unityObject.name;
+            }
 
-         return value.GetType().Name;
-      }
+            return value.GetType().Name;
+        }
 
-   #endregion
+    #endregion
 
-   #region Equality / Hash
+    #region Equality / Hash
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 같은 객체 참조를 가진 document location인지 확인한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public bool Equals(IDocumentLocation other)
-      {
-         return other is ObjectDocumentLocation loc &&
-                ReferenceEquals(value, loc.value);
-      }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 같은 객체 참조를 가진 document location인지 확인한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public bool Equals(IDocumentLocation other)
+        {
+            return other is ObjectDocumentLocation loc &&
+                   ReferenceEquals(value, loc.value);
+        }
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 같은 객체 참조를 가진 document location인지 확인한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public override bool Equals(object obj)
-      {
-         return obj is IDocumentLocation loc && Equals(loc);
-      }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 같은 객체 참조를 가진 document location인지 확인한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public override bool Equals(object obj)
+        {
+            return obj is IDocumentLocation loc && Equals(loc);
+        }
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 객체 참조 기준 hash code를 반환한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public override int GetHashCode()
-      {
-         return value.GetHashCode();
-      }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 객체 참조 기준 hash code를 반환한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public override int GetHashCode()
+        {
+            return value.GetHashCode();
+        }
 
-   #endregion
+    #endregion
 
-   }
+    }
 }

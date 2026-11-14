@@ -1,6 +1,6 @@
 /* BLOCK_HEADER_BEGIN =======================================================================
 파일명 : DocumentSaveResponse.cs
-수정일 : 2026-06-19
+수정일 : 2026-11-14
 
 # 설명
 문서 저장 요청의 성공 여부와 실패 메시지를 담는 응답 값을 정의한다.
@@ -8,64 +8,65 @@
 
 namespace inonego.Xeri.Workspace.Document
 {
-   // ============================================================
-   /// <summary>
-   /// 문서 저장 요청 결과.
-   /// </summary>
-   // ============================================================
-   public readonly struct DocumentSaveResponse
-   {
-      
-   #region 필드
+    // ============================================================
+    /// <summary>
+    /// 문서 저장 요청의 성공 여부와 실패 메시지를 담는 응답.
+    /// </summary>
+    // ============================================================
+    public readonly struct DocumentSaveResponse
+    {
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 문서 저장 성공 여부.
-      /// </summary>
-      // ------------------------------------------------------------
-      public bool Success { get; }
+    #region 필드
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 저장에 실패했을 때 사용할 실패 메시지.
-      /// </summary>
-      // ------------------------------------------------------------
-      public string Error { get; }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 처리 성공 여부를 나타냅니다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public bool Success { get; }
 
-   #endregion
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 실패 원인을 설명하는 메시지입니다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public string Error { get; }
 
-   #region 생성자
+    #endregion
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 문서 저장 응답을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      private DocumentSaveResponse(bool success, string error) : this()
-      {
-         Success = success;
-         Error   = error ?? "";
-      }
+    #region 생성자
 
-   #endregion
+        private DocumentSaveResponse(bool success, string error)
+        {
+            Success = success;
+            Error = error ?? "";
+        }
 
-   #region 메서드
+    #endregion
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 성공 응답을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public static DocumentSaveResponse Succeed() => new DocumentSaveResponse(true, "");
+    #region 응답
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 실패 응답을 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public static DocumentSaveResponse Fail(string error) => new DocumentSaveResponse(false, error);
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 성공 결과를 생성합니다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public static DocumentSaveResponse Succeed()
+        {
+            return new DocumentSaveResponse(true, "");
+        }
 
-   #endregion
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 실패 결과를 생성합니다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public static DocumentSaveResponse Fail(string error)
+        {
+            return new DocumentSaveResponse(false, error);
+        }
 
-   }
+    #endregion
+
+    }
 }

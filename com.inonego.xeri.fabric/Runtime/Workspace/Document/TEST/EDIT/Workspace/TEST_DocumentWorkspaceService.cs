@@ -131,7 +131,8 @@ namespace inonego.Xeri.TEST.Workspace._Document
 
             return new DocumentWorkspaceService
             (
-                workspace, new IDocumentHandler[]
+                workspace,
+                new IDocumentHandler[]
                 {
                     new FileDocumentHandler()
                 }
@@ -245,7 +246,7 @@ namespace inonego.Xeri.TEST.Workspace._Document
                 }
             );
 
-            var response = service.Open(TypeID, CreateLocation("Lease"));
+            var response = service.Open(TypeID, CreateLocation("ReleaseHandle"));
 
             Assert.AreEqual(readSuccess, response.Success, response.Error);
             Assert.AreEqual(1, io.DisposeCount);
@@ -273,10 +274,10 @@ namespace inonego.Xeri.TEST.Workspace._Document
             var body = new DocumentBody(new Payload(name, 1));
             var document = new Document(TypeID, Version, name);
             var readValue = handlerKind == "Body"
-               ? UnityJsonSerializer.Default.Serialize(body)
-               : handlerKind == "Envelope"
-                  ? UnityJsonSerializer.Default.Serialize(new DocumentEnvelope<DocumentBody>(document, body))
-                  : "body";
+                ? UnityJsonSerializer.Default.Serialize(body)
+                : handlerKind == "Envelope"
+                    ? UnityJsonSerializer.Default.Serialize(new DocumentEnvelope<DocumentBody>(document, body))
+                    : "body";
             var io = new ReleaseHandleTextIO(readSuccess, new IOException("release failed"), readValue);
             IDocumentHandler handler;
 
@@ -337,14 +338,14 @@ namespace inonego.Xeri.TEST.Workspace._Document
             var name = "ValidBody";
             var body = new DocumentBody(new Payload(name, 1));
             var readValue = handlerKind == "Body"
-               ? UnityJsonSerializer.Default.Serialize(body)
-               : UnityJsonSerializer.Default.Serialize
-               (
-                   new DocumentEnvelope<DocumentBody>
-                   (
-                       new Document(TypeID, Version, name), body
-                   )
-               );
+                ? UnityJsonSerializer.Default.Serialize(body)
+                : UnityJsonSerializer.Default.Serialize
+                (
+                    new DocumentEnvelope<DocumentBody>
+                    (
+                        new Document(TypeID, Version, name), body
+                    )
+                );
             var io = new ReleaseHandleTextIO(true, readValue: readValue);
             IDocumentHandler handler;
 
@@ -382,12 +383,12 @@ namespace inonego.Xeri.TEST.Workspace._Document
 
     #region O-1: 이미 열린 session 재사용 흐름
 
-        // ----------------------------------------------------------------------
+        // --------------------------------------------------------------------------------
         /// <summary>
-        /// <br/> Open은 같은 typeID와 location을 가진 session이 이미 열려 있으면 기존
-        /// <br/> session을 반환한다.
+        /// <br/> Open은 같은 typeID와 location을 가진 session이 이미 열려 있으면 기존 session을
+        /// <br/> 반환한다.
         /// </summary>
-        // ----------------------------------------------------------------------
+        // --------------------------------------------------------------------------------
         [Test]
         public void TEST_DocumentWorkspaceService_Open_같은TypeID와Location_기존Session반환()
         {
@@ -531,12 +532,12 @@ namespace inonego.Xeri.TEST.Workspace._Document
             Assert.AreEqual(1, workspace.Sessions.Count);
         }
 
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         /// <summary>
-        /// <br/> SaveTo 성공 후에는 기준 location이 유지되므로 복사 location open은 새
-        /// <br/> session을 만든다.
+        /// <br/> SaveTo 성공 후에는 기준 location이 유지되므로 복사 location open은
+        /// <br/> 새 session을 만든다.
         /// </summary>
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         [Test]
         public void TEST_DocumentWorkspaceService_SaveTo_성공_복사Location은새Session생성()
         {
@@ -725,8 +726,8 @@ namespace inonego.Xeri.TEST.Workspace._Document
 
         // --------------------------------------------------------------------------------
         /// <summary>
-        /// <br/> Recovery record를 문자열로 저장했다가 다시 읽어도 file session과 dirty
-        /// <br/> 상태가 복구된다.
+        /// <br/> Recovery record를 문자열로 저장했다가 다시 읽어도 file session과 dirty 상태가
+        /// <br/> 복구된다.
         /// </summary>
         // --------------------------------------------------------------------------------
         [Test]
@@ -778,12 +779,12 @@ namespace inonego.Xeri.TEST.Workspace._Document
             }
         }
 
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         /// <summary>
-        /// <br/> Recovery record는 Unity JSON round-trip 이후에도 file location record
-        /// <br/> 타입을 유지한다.
+        /// <br/> Recovery record는 Unity JSON round-trip 이후에도 file
+        /// <br/> location record 타입을 유지한다.
         /// </summary>
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         [Test]
         public void TEST_DocumentWorkspaceService_RecordRecovery_JsonRoundTrip_LocationRecord타입보존()
         {
@@ -835,8 +836,7 @@ namespace inonego.Xeri.TEST.Workspace._Document
 
         // --------------------------------------------------------------------------------
         /// <summary>
-        /// <br/> 같은 file location이 이미 열려 있으면 recovery는 새 session을 추가하지
-        /// <br/> 않는다.
+        /// 같은 file location이 이미 열려 있으면 recovery는 새 session을 추가하지 않는다.
         /// </summary>
         // --------------------------------------------------------------------------------
         [Test]
@@ -883,12 +883,12 @@ namespace inonego.Xeri.TEST.Workspace._Document
             }
         }
 
-        // ----------------------------------------------------------------------
+        // --------------------------------------------------------------------------------
         /// <summary>
-        /// <br/> Body recovery는 transport와 분리되므로 같은 TypeID handler면 다른
-        /// <br/> transport preset에서도 복구된다.
+        /// <br/> Body recovery는 transport와 분리되므로 같은 TypeID handler면 다른 transport
+        /// <br/> preset에서도 복구된다.
         /// </summary>
-        // ----------------------------------------------------------------------
+        // --------------------------------------------------------------------------------
         [Test]
         public void TEST_DocumentWorkspaceService_Recover_같은TypeID_다른TransportPreset_Body복구()
         {
@@ -914,12 +914,12 @@ namespace inonego.Xeri.TEST.Workspace._Document
             Assert.AreEqual(52, GetPayload(recoverResponse.Sessions[0].Session).Count);
         }
 
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         /// <summary>
-        /// <br/> 기본 recovery를 제공하지 않는 location은 저장 위치 없는 session으로 조용히
-        /// <br/> 바꾸지 않고 record 실패로 드러낸다.
+        /// <br/> 기본 recovery를 제공하지 않는 location은 저장 위치 없는 session으로
+        /// <br/> 조용히 바꾸지 않고 record 실패로 드러낸다.
         /// </summary>
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         [Test]
         public void TEST_DocumentWorkspaceService_RecordRecovery_UnsupportedLocation_Record실패()
         {
@@ -1025,6 +1025,7 @@ namespace inonego.Xeri.TEST.Workspace._Document
             var service = new DocumentWorkspaceService
             (
                 workspace,
+
                 new IDocumentHandler[]
                 {
                     new TEST_Handler(TypeID, session)
@@ -1041,8 +1042,7 @@ namespace inonego.Xeri.TEST.Workspace._Document
 
         // --------------------------------------------------------------------------------
         /// <summary>
-        /// <br/> Handler가 Open에서 다른 TypeID의 session을 반환하면 workspace에 추가하지
-        /// <br/> 않는다.
+        /// Handler가 Open에서 다른 TypeID의 session을 반환하면 workspace에 추가하지 않는다.
         /// </summary>
         // --------------------------------------------------------------------------------
         [Test]
@@ -1059,6 +1059,7 @@ namespace inonego.Xeri.TEST.Workspace._Document
             var service = new DocumentWorkspaceService
             (
                 workspace,
+
                 new IDocumentHandler[]
                 {
                     new TEST_Handler(TypeID, openSession: session)
@@ -1076,8 +1077,7 @@ namespace inonego.Xeri.TEST.Workspace._Document
 
         // --------------------------------------------------------------------------------
         /// <summary>
-        /// <br/> Handler가 Open에서 location 없는 session을 반환하면 workspace에 추가하지
-        /// <br/> 않는다.
+        /// Handler가 Open에서 location 없는 session을 반환하면 workspace에 추가하지 않는다.
         /// </summary>
         // --------------------------------------------------------------------------------
         [Test]
@@ -1094,6 +1094,7 @@ namespace inonego.Xeri.TEST.Workspace._Document
             var service = new DocumentWorkspaceService
             (
                 workspace,
+
                 new IDocumentHandler[]
                 {
                     new TEST_Handler(TypeID, openSession: session)
@@ -1109,12 +1110,12 @@ namespace inonego.Xeri.TEST.Workspace._Document
             Assert.AreEqual(0, workspace.Sessions.Count);
         }
 
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         /// <summary>
-        /// <br/> Handler가 Open에서 요청 location과 다른 session을 반환하면 workspace에
-        /// <br/> 추가하지 않는다.
+        /// <br/> Handler가 Open에서 요청 location과 다른 session을 반환하면
+        /// <br/> workspace에 추가하지 않는다.
         /// </summary>
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         [Test]
         public void TEST_DocumentWorkspaceService_Handler_Open_다른LocationSession_추가실패()
         {
@@ -1130,6 +1131,7 @@ namespace inonego.Xeri.TEST.Workspace._Document
             var service = new DocumentWorkspaceService
             (
                 workspace,
+
                 new IDocumentHandler[]
                 {
                     new TEST_Handler(TypeID, openSession: session)
@@ -1163,6 +1165,7 @@ namespace inonego.Xeri.TEST.Workspace._Document
             var service = new DocumentWorkspaceService
             (
                 workspace,
+
                 new IDocumentHandler[]
                 {
                     new TEST_Handler(TypeID, session)
@@ -1195,6 +1198,7 @@ namespace inonego.Xeri.TEST.Workspace._Document
             var service = new DocumentWorkspaceService
             (
                 workspace,
+
                 new IDocumentHandler[]
                 {
                     new TEST_Handler(TypeID, session)
@@ -1211,8 +1215,7 @@ namespace inonego.Xeri.TEST.Workspace._Document
 
         // --------------------------------------------------------------------------------
         /// <summary>
-        /// <br/> Handler가 Open에서 body 없는 session을 반환하면 workspace에 추가하지
-        /// <br/> 않는다.
+        /// Handler가 Open에서 body 없는 session을 반환하면 workspace에 추가하지 않는다.
         /// </summary>
         // --------------------------------------------------------------------------------
         [Test]
@@ -1229,6 +1232,7 @@ namespace inonego.Xeri.TEST.Workspace._Document
             var service = new DocumentWorkspaceService
             (
                 workspace,
+
                 new IDocumentHandler[]
                 {
                     new TEST_Handler(TypeID, openSession: session)
@@ -1390,8 +1394,7 @@ namespace inonego.Xeri.TEST.Workspace._Document
 
         // --------------------------------------------------------------------------------
         /// <summary>
-        /// <br/> Workspace에 없는 session Close는 실패 반환하고 workspace 상태를 변경하지
-        /// <br/> 않는다.
+        /// Workspace에 없는 session Close는 실패 반환하고 workspace 상태를 변경하지 않는다.
         /// </summary>
         // --------------------------------------------------------------------------------
         [Test]

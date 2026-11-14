@@ -10,42 +10,43 @@ using System;
 
 namespace inonego.Xeri.Workspace.Document
 {
-   // ============================================================
-   /// <summary>
-   /// Document session 이벤트 인자.
-   /// </summary>
-   // ============================================================
-   public sealed class DocumentSessionEventArgs : EventArgs
-   {
-   #region 필드
+    // ============================================================
+    /// <summary>
+    /// Document session 이벤트 인자.
+    /// </summary>
+    // ============================================================
+    public sealed class DocumentSessionEventArgs : EventArgs
+    {
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 이벤트 대상 document session.
-      /// </summary>
-      // ------------------------------------------------------------
-      public IDocumentSession Session { get; }
+    #region 필드
 
-   #endregion
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 이벤트 대상 document session.
+        /// </summary>
+        // ------------------------------------------------------------
+        public IDocumentSession Session { get; }
 
-   #region 생성자
+    #endregion
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// Document session 이벤트 인자를 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public DocumentSessionEventArgs(IDocumentSession session) : base()
-      {
-         if (session == null)
-         {
-            throw new ArgumentNullException(nameof(session));
-         }
+    #region 생성자
 
-         Session = session;
-      }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// Document session 이벤트 인자를 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public DocumentSessionEventArgs(IDocumentSession session) : base()
+        {
+            if (session == null)
+            {
+                throw new ArgumentNullException(nameof(session));
+            }
 
-   #endregion
+            Session = session;
+        }
 
-   }
+    #endregion
+
+    }
 }
