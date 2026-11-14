@@ -1,10 +1,10 @@
 /* BLOCK_HEADER_BEGIN =======================================================================
 파일명 : RawTextHandler.cs
-수정일 : 2026-11-10
+수정일 : 2026-11-14
 
 # 설명
 문자열 파일을 serializer 없이 그대로 열고 저장하는 document handler를 정의한다.
-텍스트 파일, 스크립트 파일처럼 document metadata envelope가 없는 문서에 사용한다.
+IO Mapping과 RecordPersistence로 읽기 수명·기록 검증 흐름을 공유하되, 텍스트 파일에 Envelope를 강제하지 않는다.
 ========================================================================= BLOCK_HEADER_END */
 
 using System;
@@ -12,6 +12,7 @@ using System;
 using inonego;
 using inonego.Xeri;
 using inonego.Xeri.IO;
+using inonego.Xeri.Persistence;
 
 namespace inonego.Xeri.Workspace.Document
 {
@@ -25,12 +26,12 @@ namespace inonego.Xeri.Workspace.Document
 
     #region 생성
 
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         /// <summary>
-        /// <br/> FileDocumentLocation과 TextFileIO 기본 인스턴스를 사용하는 raw text
-        /// <br/> handler를 생성한다.
+        /// <br/> FileDocumentLocation을 읽고, 임시 파일 교체 방식으로 저장하는 raw
+        /// <br/> text handler를 생성한다.
         /// </summary>
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         public static RawTextHandler<string> CreateForFile
         (
             string _typeID,
@@ -42,7 +43,7 @@ namespace inonego.Xeri.Workspace.Document
                 _typeID,
                 version,
                 TextFileIO.Default,
-                TextFileIO.Default,
+                new FileCommitWriter<string>(TextFileIO.Default),
                 TryMapFileLocation
             );
         }
@@ -105,7 +106,7 @@ namespace inonego.Xeri.Workspace.Document
         /// 지정한 텍스트로 raw text body를 생성한다.
         /// </summary>
         // ------------------------------------------------------------
-        public RawTextDocumentBody(string text)
+        public RawTextDocumentBody(string text) : base()
         {
             Text = text ?? "";
         }
@@ -131,21 +132,19 @@ namespace inonego.Xeri.Workspace.Document
         /// Handler가 담당하는 문서 종류 식별자.
         /// </summary>
         // ------------------------------------------------------------
-        public string TypeID => _typeID;
+        public string TypeID => recordType.TypeID;
 
-        private readonly string _typeID = string.Empty;
+        private readonly RecordType recordType = null;
 
         // ------------------------------------------------------------
         /// <summary>
         /// Handler가 생성하는 문서 버전.
         /// </summary>
         // ------------------------------------------------------------
-        public string Version => version;
+        public string Version => recordType.Version;
 
-        private readonly string version = string.Empty;
 
-        private readonly IDataReader<TLocation, string> reader = null;
-        private readonly IDataWriter<TLocation, string> writer = null;
+        private readonly RecordPersistence<TLocation, RawTextDocumentBody> persistence = null;
         private readonly DocumentLocationMapper<TLocation> mapLocation = null;
 
     #endregion
@@ -164,23 +163,36 @@ namespace inonego.Xeri.Workspace.Document
             IDataReader<TLocation, string> reader,
             IDataWriter<TLocation, string> writer,
             DocumentLocationMapper<TLocation> mapLocation
-        )
+        ) : base()
         {
-            if (string.IsNullOrEmpty(_typeID))
+            // 문서 종류와 버전 입력은 공통 RecordType에서 검증한다.
+            this.recordType = new RecordType(_typeID, version);
+            if (reader == null)
             {
-                throw new ArgumentException("문서 종류 식별자가 비어 있습니다.", nameof(_typeID));
+                throw new ArgumentNullException(nameof(reader));
             }
 
-            if (string.IsNullOrEmpty(version))
+            if (writer == null)
             {
-                throw new ArgumentException("문서 버전이 비어 있습니다.", nameof(version));
+                throw new ArgumentNullException(nameof(writer));
             }
 
-            this._typeID = _typeID;
-            this.version = version;
-            this.reader = reader ?? throw new ArgumentNullException(nameof(reader));
-            this.writer = writer ?? throw new ArgumentNullException(nameof(writer));
             this.mapLocation = mapLocation ?? throw new ArgumentNullException(nameof(mapLocation));
+
+            // RawText 역시 별도의 serializer 없이 범용 IO Mapping과 기록 수명 경계를 사용한다.
+            persistence = new RecordPersistence<TLocation, RawTextDocumentBody>
+            (
+                new MappedDataReader<TLocation, string, RawTextDocumentBody>
+                (
+                    reader,
+                    text => new RawTextDocumentBody(text)
+                ),
+                new MappedDataWriter<TLocation, RawTextDocumentBody, string>
+                (
+                    writer,
+                    body => body.Text ?? string.Empty
+                )
+            );
         }
 
     #endregion
@@ -227,47 +239,25 @@ namespace inonego.Xeri.Workspace.Document
                 return DocumentOpenResponse.Fail("location을 IO location으로 변환할 수 없습니다.");
             }
 
-            IReleaseHandle releaseHandle = null;
-            DocumentOpenResponse result;
+            // RecordPersistence가 읽은 텍스트의 수명을 종료하고 독립된 Body를 반환한다.
+            var response = persistence.Load(ioLoc);
 
-            try
+            if (!response.Success)
             {
-                var response = reader.Read(ioLoc);
-                releaseHandle = response.ReleaseHandle;
-
-                if (!response.Success)
-                {
-                    result = DocumentOpenResponse.Fail(response.Error);
-                }
-                else
-                {
-                    var document = new Document(TypeID, Version, loc.Name);
-                    var body = new RawTextDocumentBody(response.Value);
-                    var session = new DocumentSession<RawTextDocumentBody>(document, body, loc);
-
-                    result = DocumentOpenResponse.Succeed(session);
-                }
-            }
-            catch (Exception exception)
-            {
-                result = DocumentOpenResponse.Fail(exception.Message);
+                return DocumentOpenResponse.Fail(response.Error);
             }
 
             try
             {
-                // 결과를 확정하기 전에 IO 수명 종료를 완료한다.
-                releaseHandle?.Dispose();
+                var document = new Document(TypeID, Version, loc.Name);
+                var session = new DocumentSession<RawTextDocumentBody>(document, response.Value, loc);
+
+                return DocumentOpenResponse.Succeed(session);
             }
             catch (Exception exception)
             {
-                var releaseError = "IO ReleaseHandle 정리에 실패했습니다: " + exception.Message;
-                return DocumentOpenResponse.Fail
-                (
-                    result.Success ? releaseError : result.Error + "; " + releaseError
-                );
+                return DocumentOpenResponse.Fail(exception.Message);
             }
-
-            return result;
         }
 
     #endregion
@@ -291,7 +281,7 @@ namespace inonego.Xeri.Workspace.Document
                 return DocumentSaveResponse.Fail("location을 IO location으로 변환할 수 없습니다.");
             }
 
-            var response = writer.Write(ioLoc, body.Text ?? "");
+            var response = persistence.Save(ioLoc, body);
             return response.Success ? DocumentSaveResponse.Succeed() : DocumentSaveResponse.Fail(response.Error);
         }
 
@@ -321,7 +311,7 @@ namespace inonego.Xeri.Workspace.Document
             IDocumentLocation loc
         )
         {
-            if (document == null || document.TypeID != TypeID || bodyRecord == null)
+            if (!DocumentMetadataValidation.IsMatch(document, recordType) || bodyRecord == null)
             {
                 return DocumentOpenResponse.Fail("raw text recovery record를 복구할 수 없습니다.");
             }
@@ -349,7 +339,7 @@ namespace inonego.Xeri.Workspace.Document
         {
             body = null;
 
-            if (session?.Document == null || session.Document.TypeID != TypeID)
+            if (!DocumentMetadataValidation.IsMatch(session?.Document, recordType))
             {
                 return false;
             }

@@ -1,10 +1,10 @@
 /* BLOCK_HEADER_BEGIN =======================================================================
 파일명 : BodySerializedHandler.cs
-수정일 : 2026-11-10
+수정일 : 2026-11-14
 
 # 설명
 DocumentEnvelope 없이 body 자체를 serializer root로 열고 저장하는 document handler를 정의한다.
-기존 JSON/XML root 구조를 유지해야 하는 문서에 사용한다.
+기존 IO Mapping과 RecordPersistence의 검증·ReleaseHandle 수명 처리 기능을 조합한다.
 ========================================================================= BLOCK_HEADER_END */
 
 using System;
@@ -12,6 +12,7 @@ using System;
 using inonego;
 using inonego.Xeri;
 using inonego.Xeri.IO;
+using inonego.Xeri.Persistence;
 using inonego.Xeri.Serializable;
 
 namespace inonego.Xeri.Workspace.Document
@@ -28,8 +29,8 @@ namespace inonego.Xeri.Workspace.Document
 
         // ----------------------------------------------------------------------
         /// <summary>
-        /// <br/> FileDocumentLocation과 TextFileIO 기본 인스턴스를 사용하는 body
-        /// <br/> serialized handler를 생성한다.
+        /// <br/> FileDocumentLocation을 읽고, 임시 파일 교체 방식으로 저장하는
+        /// <br/> body-root serialized handler를 생성한다.
         /// </summary>
         // ----------------------------------------------------------------------
         public static BodySerializedHandler<TBody, string> CreateForFile<TBody>
@@ -47,7 +48,7 @@ namespace inonego.Xeri.Workspace.Document
                 version,
                 serializer,
                 TextFileIO.Default,
-                TextFileIO.Default,
+                new FileCommitWriter<string>(TextFileIO.Default),
                 TryMapFileLocation,
                 createBody
             );
@@ -95,22 +96,20 @@ namespace inonego.Xeri.Workspace.Document
         /// Handler가 담당하는 문서 종류 식별자.
         /// </summary>
         // ------------------------------------------------------------
-        public string TypeID => _typeID;
+        public string TypeID => recordType.TypeID;
 
-        private readonly string _typeID = string.Empty;
+        private readonly RecordType recordType = null;
 
         // ------------------------------------------------------------
         /// <summary>
         /// Handler가 생성하는 문서 버전.
         /// </summary>
         // ------------------------------------------------------------
-        public string Version => version;
+        public string Version => recordType.Version;
 
-        private readonly string version = string.Empty;
 
-        private readonly ISerializer serializer = null;
-        private readonly IDataReader<TLocation, string> reader = null;
-        private readonly IDataWriter<TLocation, string> writer = null;
+        private readonly RecordPersistence<TLocation, TBody> persistence = null;
+        private readonly SerializedDocumentBodyRecovery<TBody> recovery = null;
         private readonly DocumentLocationMapper<TLocation> mapLocation = null;
         private readonly DocumentBodyCreator<TBody> createBody = null;
 
@@ -132,25 +131,43 @@ namespace inonego.Xeri.Workspace.Document
             IDataWriter<TLocation, string> writer,
             DocumentLocationMapper<TLocation> mapLocation,
             DocumentBodyCreator<TBody> createBody = null
-        )
+        ) : base()
         {
-            if (string.IsNullOrEmpty(_typeID))
+            // 문서 종류와 버전 입력은 공통 RecordType에서 검증한다.
+            this.recordType = new RecordType(_typeID, version);
+            if (serializer == null)
             {
-                throw new ArgumentException("문서 종류 식별자가 비어 있습니다.", nameof(_typeID));
+                throw new ArgumentNullException(nameof(serializer));
             }
 
-            if (string.IsNullOrEmpty(version))
+            if (reader == null)
             {
-                throw new ArgumentException("문서 버전이 비어 있습니다.", nameof(version));
+                throw new ArgumentNullException(nameof(reader));
             }
 
-            this._typeID = _typeID;
-            this.version = version;
-            this.serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
-            this.reader = reader ?? throw new ArgumentNullException(nameof(reader));
-            this.writer = writer ?? throw new ArgumentNullException(nameof(writer));
+            if (writer == null)
+            {
+                throw new ArgumentNullException(nameof(writer));
+            }
+
             this.mapLocation = mapLocation ?? throw new ArgumentNullException(nameof(mapLocation));
             this.createBody = createBody;
+            this.recovery = new SerializedDocumentBodyRecovery<TBody>(serializer);
+
+            // 변환은 기존 IO Mapping, 기록 검증과 수명 종료는 Persistence가 담당한다.
+            persistence = new RecordPersistence<TLocation, TBody>
+            (
+                new MappedDataReader<TLocation, string, TBody>
+                (
+                    reader,
+                    serializer.Deserialize<TBody>
+                ),
+                new MappedDataWriter<TLocation, TBody, string>
+                (
+                    writer,
+                    serializer.Serialize
+                )
+            );
         }
 
     #endregion
@@ -214,53 +231,25 @@ namespace inonego.Xeri.Workspace.Document
                 return DocumentOpenResponse.Fail("location을 IO location으로 변환할 수 없습니다.");
             }
 
-            IReleaseHandle releaseHandle = null;
-            DocumentOpenResponse result;
+            // IO Mapping의 변환 결과를 Persistence에서 검증하고 ReleaseHandle을 종료한다.
+            var response = persistence.Load(ioLoc);
 
-            try
+            if (!response.Success)
             {
-                var response = reader.Read(ioLoc);
-                releaseHandle = response.ReleaseHandle;
-
-                if (!response.Success)
-                {
-                    result = DocumentOpenResponse.Fail(response.Error);
-                }
-                else
-                {
-                    var body = serializer.Deserialize<TBody>(response.Value);
-                    if (body == null)
-                    {
-                        result = DocumentOpenResponse.Fail("역직렬화된 document body가 없습니다.");
-                    }
-                    else
-                    {
-                        var document = new Document(TypeID, Version, loc.Name);
-                        var session = new DocumentSession<TBody>(document, body, loc);
-                        result = DocumentOpenResponse.Succeed(session);
-                    }
-                }
-            }
-            catch (Exception exception)
-            {
-                result = DocumentOpenResponse.Fail(exception.Message);
+                return DocumentOpenResponse.Fail(response.Error);
             }
 
             try
             {
-                // 결과를 확정하기 전에 IO 수명 종료를 완료한다.
-                releaseHandle?.Dispose();
+                var document = new Document(TypeID, Version, loc.Name);
+                var session = new DocumentSession<TBody>(document, response.Value, loc);
+
+                return DocumentOpenResponse.Succeed(session);
             }
             catch (Exception exception)
             {
-                var releaseError = "IO ReleaseHandle 정리에 실패했습니다: " + exception.Message;
-                return DocumentOpenResponse.Fail
-                (
-                    result.Success ? releaseError : result.Error + "; " + releaseError
-                );
+                return DocumentOpenResponse.Fail(exception.Message);
             }
-
-            return result;
         }
 
     #endregion
@@ -284,17 +273,8 @@ namespace inonego.Xeri.Workspace.Document
                 return DocumentSaveResponse.Fail("location을 IO location으로 변환할 수 없습니다.");
             }
 
-            try
-            {
-                var text = serializer.Serialize(body);
-                var response = writer.Write(ioLoc, text);
-
-                return response.Success ? DocumentSaveResponse.Succeed() : DocumentSaveResponse.Fail(response.Error);
-            }
-            catch (Exception exception)
-            {
-                return DocumentSaveResponse.Fail(exception.Message);
-            }
+            var response = persistence.Save(ioLoc, body);
+            return response.Success ? DocumentSaveResponse.Succeed() : DocumentSaveResponse.Fail(response.Error);
         }
 
     #endregion
@@ -313,22 +293,14 @@ namespace inonego.Xeri.Workspace.Document
                 return null;
             }
 
-            try
-            {
-                return new DocumentBodyRecoveryRecord(serializer.Serialize(body));
-            }
-            catch
-            {
-                return null;
-            }
+            return recovery.Record(body);
         }
 
-        // ----------------------------------------------------------------------
+        // --------------------------------------------------------------------------------
         /// <summary>
-        /// <br/> 지정한 document, body record, location에서 body-root session을
-        /// <br/> 복구한다.
+        /// 지정한 document, body record, location에서 body-root session을 복구한다.
         /// </summary>
-        // ----------------------------------------------------------------------
+        // --------------------------------------------------------------------------------
         public DocumentOpenResponse RecoverSession
         (
             IDocument document,
@@ -343,11 +315,7 @@ namespace inonego.Xeri.Workspace.Document
 
             try
             {
-                var body = serializer.Deserialize<TBody>(bodyRecord.Record);
-                if (body == null)
-                {
-                    return DocumentOpenResponse.Fail("recovery body record가 비어 있습니다.");
-                }
+                var body = recovery.Recover(bodyRecord);
 
                 var session = new DocumentSession<TBody>(document, body, loc);
 
@@ -376,7 +344,7 @@ namespace inonego.Xeri.Workspace.Document
         {
             body = null;
 
-            if (session?.Document == null || session.Document.TypeID != TypeID)
+            if (!DocumentMetadataValidation.IsMatch(session?.Document, recordType))
             {
                 return false;
             }
@@ -402,17 +370,9 @@ namespace inonego.Xeri.Workspace.Document
             DocumentBodyRecoveryRecord bodyRecord
         )
         {
-            if (document == null || bodyRecord == null)
-            {
-                return false;
-            }
-
-            if (document.TypeID != TypeID)
-            {
-                return false;
-            }
-
-            return string.IsNullOrEmpty(bodyRecord.Record) == false;
+            return DocumentMetadataValidation.IsMatch(document, recordType) &&
+                   bodyRecord != null &&
+                   !string.IsNullOrEmpty(bodyRecord.Record);
         }
 
     #endregion

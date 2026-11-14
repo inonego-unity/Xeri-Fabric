@@ -1,6 +1,6 @@
 /* BLOCK_HEADER_BEGIN =======================================================================
 파일명 : TEST_DocumentWorkspaceService.cs
-수정일 : 2026-11-10
+수정일 : 2026-11-14
 
 # 설명
 DocumentWorkspaceService의 create/open/save/close 실행 계약을 검증한다.
@@ -52,6 +52,11 @@ namespace inonego.Xeri.TEST.Workspace._Document
 
         #region 필드
 
+            // ------------------------------------------------------------
+            /// <summary>
+            /// Reader ReleaseHandle이 종료된 횟수.
+            /// </summary>
+            // ------------------------------------------------------------
             public int DisposeCount { get; private set; }
 
             private readonly bool readSuccess;
@@ -118,6 +123,38 @@ namespace inonego.Xeri.TEST.Workspace._Document
 
         #endregion
 
+        }
+
+        // ============================================================
+        /// <summary>
+        /// Recovery record 생성 중 실패하는 Location.
+        /// </summary>
+        // ============================================================
+        private sealed class FailingRecordLocation : IDocumentLocation
+        {
+            // ------------------------------------------------------------
+            /// <summary>
+            /// Location의 표시 이름.
+            /// </summary>
+            // ------------------------------------------------------------
+            public string Name => "RecordFailure";
+
+            // ------------------------------------------------------------
+            /// <summary>
+            /// 동일 객체만 같은 Location으로 취급한다.
+            /// </summary>
+            // ------------------------------------------------------------
+            public bool Equals(IDocumentLocation other) => ReferenceEquals(this, other);
+
+            // ------------------------------------------------------------
+            /// <summary>
+            /// Location 기록 생성 실패를 재현한다.
+            /// </summary>
+            // ------------------------------------------------------------
+            public IDocumentLocationRecord Record()
+            {
+                throw new InvalidOperationException("location record failure");
+            }
         }
 
         // ------------------------------------------------------------
@@ -933,6 +970,116 @@ namespace inonego.Xeri.TEST.Workspace._Document
 
             Assert.IsFalse(recordResponse.Success);
             Assert.AreEqual(0, restoredRecord.Sessions.Count);
+        }
+
+        // ----------------------------------------------------------------------
+        /// <summary>
+        /// Location 기록 생성 중 예외가 발생해도 다른 Session 기록은 보존한다.
+        /// </summary>
+        // ----------------------------------------------------------------------
+        [Test]
+        public void TEST_DocumentWorkspaceService_RecordRecovery_예외Session제외_정상Session보존()
+        {
+            var service = CreateService(out _);
+            var broken = service.Create(TypeID, "Broken");
+            var valid = service.Create(TypeID, "Valid");
+
+            Assert.IsTrue(broken.Success, broken.Error);
+            Assert.IsTrue(valid.Success, valid.Error);
+
+            broken.Session.SetLocation(new FailingRecordLocation());
+            SetPayload(valid.Session, "survived", 19);
+
+            var recorded = service.RecordRecovery();
+
+            Assert.IsFalse(recorded.Success);
+            Assert.IsNotEmpty(recorded.Error);
+
+            var record = UnityJsonSerializer.Pretty.Deserialize<DocumentWorkspaceRecoveryRecord>(recorded.Record);
+
+            Assert.AreEqual(1, record.Sessions.Count);
+            Assert.AreEqual("Valid", record.Sessions[0].Name);
+            Assert.IsNull(record.Sessions[0].Location);
+        }
+
+        // ----------------------------------------------------------------------
+        /// <summary>
+        /// 문서 버전이나 이름이 누락된 복구 기록은 예외 없이 실패 응답을 반환한다.
+        /// </summary>
+        // ----------------------------------------------------------------------
+        [TestCase("Version")]
+        [TestCase("Name")]
+        public void TEST_DocumentWorkspaceService_Recover_문서정보누락_실패응답(string missingField)
+        {
+            var sourceService = CreateService(out _);
+            var created = sourceService.Create(TypeID, "InvalidMetadata");
+
+            Assert.IsTrue(created.Success, created.Error);
+
+            var recorded = sourceService.RecordRecovery();
+
+            Assert.IsTrue(recorded.Success, recorded.Error);
+
+            var record = UnityJsonSerializer.Pretty.Deserialize<DocumentWorkspaceRecoveryRecord>(recorded.Record);
+
+            Assert.AreEqual(1, record.Sessions.Count);
+
+            if (missingField == "Version")
+            {
+                record.Sessions[0].Version = "";
+            }
+            else
+            {
+                record.Sessions[0].Name = "";
+            }
+
+            var targetService = CreateService(out var workspace);
+            var recovered = targetService.Recover(UnityJsonSerializer.Pretty.Serialize(record));
+
+            Assert.IsFalse(recovered.Success);
+            Assert.IsNotEmpty(recovered.Error);
+            Assert.AreEqual(1, recovered.Sessions.Count);
+            Assert.AreEqual(DocumentSessionRecoveryKind.Failed, recovered.Sessions[0].Kind);
+            Assert.AreEqual(0, workspace.Sessions.Count);
+        }
+
+        // ----------------------------------------------------------------------
+        /// <summary>
+        /// 손상된 Session이 있어도 다른 정상 Session은 복구하고 실패를 보고한다.
+        /// </summary>
+        // ----------------------------------------------------------------------
+        [Test]
+        public void TEST_DocumentWorkspaceService_Recover_부분실패_정상Session복구()
+        {
+            var sourceService = CreateService(out _);
+            var broken = sourceService.Create(TypeID, "Broken");
+            var valid = sourceService.Create(TypeID, "Valid");
+
+            Assert.IsTrue(broken.Success, broken.Error);
+            Assert.IsTrue(valid.Success, valid.Error);
+
+            SetPayload(valid.Session, "restored", 17);
+
+            var recorded = sourceService.RecordRecovery();
+
+            Assert.IsTrue(recorded.Success, recorded.Error);
+
+            var record = UnityJsonSerializer.Pretty.Deserialize<DocumentWorkspaceRecoveryRecord>(recorded.Record);
+
+            Assert.AreEqual(2, record.Sessions.Count);
+
+            record.Sessions[0].Version = "";
+
+            var targetService = CreateService(out var workspace);
+            var recovered = targetService.Recover(UnityJsonSerializer.Pretty.Serialize(record));
+
+            Assert.IsFalse(recovered.Success);
+            Assert.AreEqual(2, recovered.Sessions.Count);
+            Assert.AreEqual(DocumentSessionRecoveryKind.Failed, recovered.Sessions[0].Kind);
+            Assert.AreEqual(DocumentSessionRecoveryKind.Recovered, recovered.Sessions[1].Kind);
+            Assert.AreEqual(1, workspace.Sessions.Count);
+            Assert.AreEqual("restored", GetPayload(workspace.Sessions[0]).Text);
+            Assert.AreEqual(17, GetPayload(workspace.Sessions[0]).Count);
         }
 
     #endregion

@@ -1,10 +1,10 @@
 /* BLOCK_HEADER_BEGIN =======================================================================
 파일명 : EnvelopeSerializedHandler.cs
-수정일 : 2026-11-10
+수정일 : 2026-11-14
 
 # 설명
-DocumentEnvelope 기반 Xeri native serialized document를 생성, 열기, 저장, 복구하는 concrete handler를 정의한다.
-Storage structure와 serializer 정책을 중심으로 두고, IO transport와 location mapping은 주입받아 조합한다.
+DocumentEnvelope 기반 Xeri native serialized document를 생성, 열기, 저장, 복구하는 handler다.
+문서 Metadata·Session 정책은 유지하고 IO Mapping 및 RecordPersistence로 공통 기록 검증·수명 처리를 수행한다.
 ========================================================================= BLOCK_HEADER_END */
 
 using System;
@@ -12,6 +12,7 @@ using System;
 using inonego;
 using inonego.Xeri;
 using inonego.Xeri.IO;
+using inonego.Xeri.Persistence;
 using inonego.Xeri.Serializable;
 
 namespace inonego.Xeri.Workspace.Document
@@ -42,12 +43,12 @@ namespace inonego.Xeri.Workspace.Document
 
     #region 생성
 
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         /// <summary>
-        /// <br/> FileDocumentLocation과 TextFileIO 기본 인스턴스를 사용하는 envelope
-        /// <br/> serialized handler를 생성한다.
+        /// <br/> FileDocumentLocation을 읽고, 임시 파일 교체 방식으로 저장하는
+        /// <br/> envelope serialized handler를 생성한다.
         /// </summary>
-        // --------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------
         public static EnvelopeSerializedHandler<TBody, string> CreateForFile<TBody>
         (
             string _typeID,
@@ -63,7 +64,7 @@ namespace inonego.Xeri.Workspace.Document
                 version,
                 serializer,
                 TextFileIO.Default,
-                TextFileIO.Default,
+                new FileCommitWriter<string>(TextFileIO.Default),
                 TryMapFileLocation,
                 createBody
             );
@@ -93,8 +94,8 @@ namespace inonego.Xeri.Workspace.Document
     // ================================================================================
     /// <summary>
     /// <br/> DocumentEnvelope 기반 Xeri native serialized document handler.
-    /// <br/> IO transport, serializer, location mapping, create policy를
-    /// <br/> 생성자에서 주입받아 동작한다.
+    /// <br/> IO transport, serializer, location mapping, create policy를 생성자에서
+    /// <br/> 주입받아 동작한다.
     /// </summary>
     /// <typeparam name="TBody">문서 body 타입.</typeparam>
     /// <typeparam name="TLocation">reader/writer가 실제로 사용하는 IO location 타입.</typeparam>
@@ -111,46 +112,20 @@ namespace inonego.Xeri.Workspace.Document
         /// Handler가 담당하는 문서 종류 식별자.
         /// </summary>
         // ------------------------------------------------------------
-        public string TypeID => _typeID;
+        public string TypeID => recordType.TypeID;
 
-        private readonly string _typeID = string.Empty;
+        private readonly RecordType recordType = null;
 
         // ------------------------------------------------------------
         /// <summary>
         /// Handler가 생성하는 문서 버전.
         /// </summary>
         // ------------------------------------------------------------
-        public string Version => version;
+        public string Version => recordType.Version;
 
-        private readonly string version = string.Empty;
+        private readonly RecordPersistence<TLocation, DocumentEnvelope<TBody>> persistence = null;
 
-        // ------------------------------------------------------------
-        /// <summary>
-        /// Document envelope와 문자열 사이를 변환하는 serializer.
-        /// </summary>
-        // ------------------------------------------------------------
-        public ISerializer Serializer => serializer;
-
-        private readonly ISerializer serializer = null;
-
-        // ------------------------------------------------------------
-        /// <summary>
-        /// IO location에서 serialized text를 읽는 reader.
-        /// </summary>
-        // ------------------------------------------------------------
-        public IDataReader<TLocation, string> Reader => reader;
-
-        private readonly IDataReader<TLocation, string> reader = null;
-
-        // ------------------------------------------------------------
-        /// <summary>
-        /// IO location에 serialized text를 쓰는 writer.
-        /// </summary>
-        // ------------------------------------------------------------
-        public IDataWriter<TLocation, string> Writer => writer;
-
-        private readonly IDataWriter<TLocation, string> writer = null;
-
+        private readonly SerializedDocumentBodyRecovery<TBody> recovery = null;
         private readonly DocumentLocationMapper<TLocation> mapLocation = null;
         private readonly DocumentBodyCreator<TBody> createBody = null;
 
@@ -172,25 +147,44 @@ namespace inonego.Xeri.Workspace.Document
             IDataWriter<TLocation, string> writer,
             DocumentLocationMapper<TLocation> mapLocation,
             DocumentBodyCreator<TBody> createBody = null
-        )
+        ) : base()
         {
-            if (string.IsNullOrEmpty(_typeID))
+            // 문서 종류와 버전 입력은 공통 RecordType에서 검증한다.
+            this.recordType = new RecordType(_typeID, version);
+            if (serializer == null)
             {
-                throw new ArgumentException("문서 종류 식별자가 비어 있습니다.", nameof(_typeID));
+                throw new ArgumentNullException(nameof(serializer));
             }
 
-            if (string.IsNullOrEmpty(version))
+            if (reader == null)
             {
-                throw new ArgumentException("문서 버전이 비어 있습니다.", nameof(version));
+                throw new ArgumentNullException(nameof(reader));
             }
 
-            this._typeID = _typeID;
-            this.version = version;
-            this.serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
-            this.reader = reader ?? throw new ArgumentNullException(nameof(reader));
-            this.writer = writer ?? throw new ArgumentNullException(nameof(writer));
+            if (writer == null)
+            {
+                throw new ArgumentNullException(nameof(writer));
+            }
+
             this.mapLocation = mapLocation ?? throw new ArgumentNullException(nameof(mapLocation));
             this.createBody = createBody;
+            this.recovery = new SerializedDocumentBodyRecovery<TBody>(serializer);
+
+            // 범용 IO Mapping을 재사용하고 기록 유효성·IO ReleaseHandle 수명을 공통 Persistence에 위임한다.
+            persistence = new RecordPersistence<TLocation, DocumentEnvelope<TBody>>
+            (
+                new MappedDataReader<TLocation, string, DocumentEnvelope<TBody>>
+                (
+                    reader,
+                    serializer.Deserialize<DocumentEnvelope<TBody>>
+                ),
+                new MappedDataWriter<TLocation, DocumentEnvelope<TBody>, string>
+                (
+                    writer,
+                    serializer.Serialize
+                ),
+                ValidateEnvelope
+            );
         }
 
     #endregion
@@ -254,51 +248,22 @@ namespace inonego.Xeri.Workspace.Document
                 return DocumentOpenResponse.Fail("location을 IO location으로 변환할 수 없습니다.");
             }
 
-            IReleaseHandle releaseHandle = null;
-            DocumentOpenResponse result;
+            // 읽기/변환/검증 후 원본 IO ReleaseHandle 해제는 Persistence가 맡는다.
+            var response = persistence.Load(ioLoc);
 
-            try
+            if (!response.Success)
             {
-                var response = reader.Read(ioLoc);
-                releaseHandle = response.ReleaseHandle;
-
-                if (!response.Success)
-                {
-                    result = DocumentOpenResponse.Fail(response.Error);
-                }
-                else
-                {
-                    var envelope = serializer.Deserialize<DocumentEnvelope<TBody>>(response.Value);
-                    if (envelope == null || envelope.Metadata == null || envelope.Body == null)
-                    {
-                        result = DocumentOpenResponse.Fail("역직렬화된 document envelope가 올바르지 않습니다.");
-                    }
-                    else
-                    {
-                        result = CreateOpenResponse(envelope, loc);
-                    }
-                }
-            }
-            catch (Exception exception)
-            {
-                result = DocumentOpenResponse.Fail(exception.Message);
+                return DocumentOpenResponse.Fail(response.Error);
             }
 
             try
             {
-                // 결과를 확정하기 전에 IO 수명 종료를 완료한다.
-                releaseHandle?.Dispose();
+                return CreateOpenResponse(response.Value, loc);
             }
             catch (Exception exception)
             {
-                var releaseError = "IO ReleaseHandle 정리에 실패했습니다: " + exception.Message;
-                return DocumentOpenResponse.Fail
-                (
-                    result.Success ? releaseError : result.Error + "; " + releaseError
-                );
+                return DocumentOpenResponse.Fail(exception.Message);
             }
-
-            return result;
         }
 
     #endregion
@@ -322,22 +287,8 @@ namespace inonego.Xeri.Workspace.Document
                 return DocumentSaveResponse.Fail("location을 IO location으로 변환할 수 없습니다.");
             }
 
-            try
-            {
-                var documentText = serializer.Serialize(envelope);
-                var writeResponse = writer.Write(ioLoc, documentText);
-
-                if (!writeResponse.Success)
-                {
-                    return DocumentSaveResponse.Fail(writeResponse.Error);
-                }
-
-                return DocumentSaveResponse.Succeed();
-            }
-            catch (Exception exception)
-            {
-                return DocumentSaveResponse.Fail(exception.Message);
-            }
+            var response = persistence.Save(ioLoc, envelope);
+            return response.Success ? DocumentSaveResponse.Succeed() : DocumentSaveResponse.Fail(response.Error);
         }
 
     #endregion
@@ -356,19 +307,12 @@ namespace inonego.Xeri.Workspace.Document
                 return null;
             }
 
-            if (session?.Document == null || session.Document.TypeID != TypeID)
+            if (!DocumentMetadataValidation.IsMatch(session.Document, recordType))
             {
                 return null;
             }
 
-            try
-            {
-                return new DocumentBodyRecoveryRecord(serializer.Serialize(body));
-            }
-            catch
-            {
-                return null;
-            }
+            return recovery.Record(body);
         }
 
         // ----------------------------------------------------------------------
@@ -390,11 +334,7 @@ namespace inonego.Xeri.Workspace.Document
 
             try
             {
-                var body = serializer.Deserialize<TBody>(bodyRecord.Record);
-                if (body == null)
-                {
-                    return DocumentOpenResponse.Fail("recovery body record가 비어 있습니다.");
-                }
+                var body = recovery.Recover(bodyRecord);
 
                 var session = new DocumentSession<TBody>(document, body, loc);
 
@@ -415,7 +355,7 @@ namespace inonego.Xeri.Workspace.Document
         {
             envelope = null;
 
-            if (session?.Document == null || session.Document.TypeID != TypeID)
+            if (!DocumentMetadataValidation.IsMatch(session?.Document, recordType))
             {
                 return false;
             }
@@ -437,6 +377,27 @@ namespace inonego.Xeri.Workspace.Document
 
         // ------------------------------------------------------------
         /// <summary>
+        /// 문서 envelope의 필수 metadata와 body가 존재하는지 검증한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        private void ValidateEnvelope(DocumentEnvelope<TBody> envelope)
+        {
+            // 공통 Record/Metadata 계약에서 Body와 종류·버전을 함께 검증한다.
+            recordType.Validate(envelope);
+
+            if (!envelope.HasBody)
+            {
+                throw new InvalidOperationException("Document Body가 직렬화 기록에 존재하지 않습니다.");
+            }
+
+            if (string.IsNullOrWhiteSpace(envelope.Metadata.Name))
+            {
+                throw new InvalidOperationException("document envelope의 Name이 비어 있습니다.");
+            }
+        }
+
+        // ------------------------------------------------------------
+        /// <summary>
         /// 지정한 session에서 typed body를 꺼낸다.
         /// </summary>
         // ------------------------------------------------------------
@@ -448,7 +409,7 @@ namespace inonego.Xeri.Workspace.Document
         {
             body = null;
 
-            if (session?.Document == null || session.Document.TypeID != TypeID)
+            if (!DocumentMetadataValidation.IsMatch(session?.Document, recordType))
             {
                 return false;
             }
@@ -474,17 +435,9 @@ namespace inonego.Xeri.Workspace.Document
             DocumentBodyRecoveryRecord bodyRecord
         )
         {
-            if (document == null || bodyRecord == null)
-            {
-                return false;
-            }
-
-            if (document.TypeID != TypeID)
-            {
-                return false;
-            }
-
-            return string.IsNullOrEmpty(bodyRecord.Record) == false;
+            return DocumentMetadataValidation.IsMatch(document, recordType) &&
+                   bodyRecord != null &&
+                   !string.IsNullOrEmpty(bodyRecord.Record);
         }
 
         // ------------------------------------------------------------
@@ -526,7 +479,7 @@ namespace inonego.Xeri.Workspace.Document
             }
 
             var document = envelope.Metadata.ToDocument();
-            if (document == null || document.TypeID != TypeID)
+            if (!DocumentMetadataValidation.IsMatch(document, recordType))
             {
                 return false;
             }

@@ -1,6 +1,6 @@
 /* BLOCK_HEADER_BEGIN =======================================================================
 파일명 : DocumentWorkspaceRecoveryRecord.cs
-수정일 : 2026-07-01
+수정일 : 2026-11-14
 
 # 설명
 Workspace document session을 host lifecycle boundary 이후 복구하기 위한 record 값을 정의한다.
@@ -8,293 +8,307 @@ Unity Editor API에 의존하지 않는 순수 데이터 계약으로 유지한�
 ========================================================================= BLOCK_HEADER_END */
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 
 using UnityEngine;
 
 namespace inonego.Xeri.Workspace.Document
 {
-   // ============================================================
-   /// <summary>
-   /// Workspace 전체 recovery record.
-   /// </summary>
-   // ============================================================
-   [Serializable]
-   public sealed class DocumentWorkspaceRecoveryRecord
-   {
-   #region 필드
+    // ============================================================
+    /// <summary>
+    /// Workspace 전체 recovery record.
+    /// </summary>
+    // ============================================================
+    [Serializable]
+    public sealed class DocumentWorkspaceRecoveryRecord
+    {
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 복구 대상 session record 목록.
-      /// </summary>
-      // ------------------------------------------------------------
-      public List<DocumentSessionRecoveryRecord> Sessions = new List<DocumentSessionRecoveryRecord>();
+    #region 필드
 
-   #endregion
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 복구 대상 session record 목록.
+        /// </summary>
+        // ------------------------------------------------------------
+        public List<DocumentSessionRecoveryRecord> Sessions = new List<DocumentSessionRecoveryRecord>();
 
-   #region 생성자
+    #endregion
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 기본 workspace recovery record를 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public DocumentWorkspaceRecoveryRecord() : base() {}
+    #region 생성자
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// Workspace recovery record를 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public DocumentWorkspaceRecoveryRecord
-      (
-         IEnumerable<DocumentSessionRecoveryRecord> sessions
-      ) : this()
-      {
-         if (sessions == null) return;
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 기본 workspace recovery record를 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public DocumentWorkspaceRecoveryRecord() : base()
+        {
+            // NONE
+        }
 
-         foreach (var session in sessions)
-         {
-            if (session == null) continue;
+        // ------------------------------------------------------------
+        /// <summary>
+        /// Workspace recovery record를 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public DocumentWorkspaceRecoveryRecord
+        (
+            IEnumerable<DocumentSessionRecoveryRecord> sessions
+        ) : this()
+        {
+            if (sessions == null) return;
 
-            Sessions.Add(session);
-         }
-      }
+            foreach (var session in sessions)
+            {
+                if (session == null) continue;
 
-   #endregion
+                Sessions.Add(session);
+            }
+        }
 
-   }
+    #endregion
 
-   // ============================================================
-   /// <summary>
-   /// 하나의 document session을 복구하기 위한 record.
-   /// </summary>
-   // ============================================================
-   [Serializable]
-   public sealed class DocumentSessionRecoveryRecord
-   {
+    }
 
-   #region 필드
+    // ============================================================
+    /// <summary>
+    /// 하나의 document session을 복구하기 위한 record.
+    /// </summary>
+    // ============================================================
+    [Serializable]
+    public sealed class DocumentSessionRecoveryRecord
+    {
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 복구 대상 문서 종류 식별자.
-      /// </summary>
-      // ------------------------------------------------------------
-      public string TypeID = string.Empty;
+    #region 필드
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 복구 대상 문서 버전.
-      /// </summary>
-      // ------------------------------------------------------------
-      public string Version = string.Empty;
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 복구 대상 문서 종류 식별자.
+        /// </summary>
+        // ------------------------------------------------------------
+        public string TypeID = string.Empty;
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 복구 대상 문서 표시 이름.
-      /// </summary>
-      // ------------------------------------------------------------
-      public string Name = string.Empty;
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 복구 대상 문서 버전.
+        /// </summary>
+        // ------------------------------------------------------------
+        public string Version = string.Empty;
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// Session location 복구 정보.
-      /// </summary>
-      // ------------------------------------------------------------
-      [SerializeReference]
-      public IDocumentLocationRecord Location = null;
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 복구 대상 문서 표시 이름.
+        /// </summary>
+        // ------------------------------------------------------------
+        public string Name = string.Empty;
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// Session body 복구 정보.
-      /// </summary>
-      // ------------------------------------------------------------
-      public DocumentBodyRecoveryRecord Body = null;
+        // ------------------------------------------------------------
+        /// <summary>
+        /// Session location 복구 정보.
+        /// </summary>
+        // ------------------------------------------------------------
+        [SerializeReference]
+        public IDocumentLocationRecord Location = null;
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// Session dirty 상태.
-      /// </summary>
-      // ------------------------------------------------------------
-      public bool IsDirty = false;
+        // ------------------------------------------------------------
+        /// <summary>
+        /// Session body 복구 정보.
+        /// </summary>
+        // ------------------------------------------------------------
+        public DocumentBodyRecoveryRecord Body = null;
 
-   #endregion
+        // ------------------------------------------------------------
+        /// <summary>
+        /// Session dirty 상태.
+        /// </summary>
+        // ------------------------------------------------------------
+        public bool IsDirty = false;
 
-   #region 생성자
+    #endregion
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 기본 session recovery record를 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public DocumentSessionRecoveryRecord() : base() {}
+    #region 생성자
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// Document session recovery record를 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public DocumentSessionRecoveryRecord
-      (
-         string _TypeID,
-         string version,
-         string name,
-         IDocumentLocationRecord location,
-         DocumentBodyRecoveryRecord body,
-         bool isDirty
-      ) : base()
-      {
-         TypeID   = _TypeID ?? "";
-         Version  = version ?? "";
-         Name     = name ?? "";
-         Location = location;
-         Body     = body;
-         IsDirty  = isDirty;
-      }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 기본 session recovery record를 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public DocumentSessionRecoveryRecord() : base()
+        {
+            // NONE
+        }
 
-   #endregion
+        // ------------------------------------------------------------
+        /// <summary>
+        /// Document session recovery record를 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public DocumentSessionRecoveryRecord
+        (
+            string _typeID,
+            string version,
+            string name,
+            IDocumentLocationRecord location,
+            DocumentBodyRecoveryRecord body,
+            bool isDirty
+        ) : base()
+        {
+            TypeID = _typeID ?? "";
+            Version = version ?? "";
+            Name = name ?? "";
+            Location = location;
+            Body = body;
+            IsDirty = isDirty;
+        }
 
-   }
+    #endregion
 
-   // ============================================================
-   /// <summary>
-   /// Document location recovery record 계약.
-   /// </summary>
-   // ============================================================
-   public interface IDocumentLocationRecord
-   {
-      // ------------------------------------------------------------
-      /// <summary>
-      /// Recovery record에서 document location을 복구한다. 복구할 수 없으면 null을 반환한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      IDocumentLocation Recover();
-   }
+    }
 
-   // ============================================================
-   /// <summary>
-   /// FileDocumentLocation 복구 record.
-   /// </summary>
-   // ============================================================
-   [Serializable]
-   public sealed class FileDocumentLocationRecord : IDocumentLocationRecord
-   {
+    // ============================================================
+    /// <summary>
+    /// Document location recovery record 계약.
+    /// </summary>
+    // ============================================================
+    public interface IDocumentLocationRecord
+    {
+        // --------------------------------------------------------------------------------
+        /// <summary>
+        /// Recovery record에서 document location을 복구한다. 복구할 수 없으면 null을 반환한다.
+        /// </summary>
+        // --------------------------------------------------------------------------------
+        IDocumentLocation Recover();
+    }
 
-   #region 필드
+    // ============================================================
+    /// <summary>
+    /// FileDocumentLocation 복구 record.
+    /// </summary>
+    // ============================================================
+    [Serializable]
+    public sealed class FileDocumentLocationRecord : IDocumentLocationRecord
+    {
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 사용자에게 표시하거나 진단에 사용할 location 이름.
-      /// </summary>
-      // ------------------------------------------------------------
-      public string Name => name;
+    #region 필드
 
-      [SerializeField]
-      private string name = string.Empty;
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 사용자에게 표시하거나 진단에 사용할 location 이름.
+        /// </summary>
+        // ------------------------------------------------------------
+        public string Name => name;
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 문서 파일 경로.
-      /// </summary>
-      // ------------------------------------------------------------
-      public string Path => path;
+        [SerializeField]
+        private string name = string.Empty;
 
-      [SerializeField]
-      private string path = string.Empty;
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 문서 파일 경로.
+        /// </summary>
+        // ------------------------------------------------------------
+        public string Path => path;
 
-   #endregion
+        [SerializeField]
+        private string path = string.Empty;
 
-   #region 생성자
+    #endregion
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 기본 file document location record를 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public FileDocumentLocationRecord() : base() {}
+    #region 생성자
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// File document location record를 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public FileDocumentLocationRecord
-      (
-         string name,
-         string path
-      ) : this()
-      {
-         this.name = name ?? "";
-         this.path = path ?? "";
-      }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 기본 file document location record를 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public FileDocumentLocationRecord() : base()
+        {
+            // NONE
+        }
 
-   #endregion
+        // ------------------------------------------------------------
+        /// <summary>
+        /// File document location record를 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public FileDocumentLocationRecord
+        (
+            string name,
+            string path
+        ) : this()
+        {
+            this.name = name ?? "";
+            this.path = path ?? "";
+        }
 
-   #region 메서드
+    #endregion
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// Record 값에서 file document location을 복구한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public IDocumentLocation Recover()
-      {
-         if (string.IsNullOrEmpty(path))
-         {
-            return null;
-         }
+    #region 메서드
 
-         var locName = string.IsNullOrEmpty(name) ? path : name;
+        // ------------------------------------------------------------
+        /// <summary>
+        /// Record 값에서 file document location을 복구한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public IDocumentLocation Recover()
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return null;
+            }
 
-         return new FileDocumentLocation(path, locName);
-      }
+            var locName = string.IsNullOrEmpty(name) ? path : name;
 
-   #endregion
+            return new FileDocumentLocation(path, locName);
+        }
 
-   }
+    #endregion
 
-   // ============================================================
-   /// <summary>
-   /// Handler가 담당하는 body 복구 payload를 담는 record.
-   /// </summary>
-   // ============================================================
-   [Serializable]
-   public sealed class DocumentBodyRecoveryRecord
-   {
+    }
 
-   #region 필드
+    // ============================================================
+    /// <summary>
+    /// Handler가 담당하는 body 복구 payload를 담는 record.
+    /// </summary>
+    // ============================================================
+    [Serializable]
+    public sealed class DocumentBodyRecoveryRecord
+    {
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// Handler가 해석할 body record 문자열.
-      /// </summary>
-      // ------------------------------------------------------------
-      public string Record = string.Empty;
+    #region 필드
 
-   #endregion
+        // ------------------------------------------------------------
+        /// <summary>
+        /// Handler가 해석할 body record 문자열.
+        /// </summary>
+        // ------------------------------------------------------------
+        public string Record = string.Empty;
 
-   #region 생성자
+    #endregion
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// 기본 document body recovery record를 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public DocumentBodyRecoveryRecord() : base() {}
+    #region 생성자
 
-      // ------------------------------------------------------------
-      /// <summary>
-      /// Document body recovery record를 생성한다.
-      /// </summary>
-      // ------------------------------------------------------------
-      public DocumentBodyRecoveryRecord(string record) : this()
-      {
-         Record = record ?? "";
-      }
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 기본 document body recovery record를 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public DocumentBodyRecoveryRecord() : base()
+        {
+            // NONE
+        }
 
-   #endregion
+        // ------------------------------------------------------------
+        /// <summary>
+        /// Document body recovery record를 생성한다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public DocumentBodyRecoveryRecord(string record) : this()
+        {
+            Record = record ?? "";
+        }
 
-   }
+    #endregion
+
+    }
 }
