@@ -1,0 +1,17 @@
+{
+  "name": "inonego.Xeri.Fabric.Data.Adapters",
+  "rootNamespace": "",
+  "references": [
+    "inonego.Xeri",
+    "inonego.Xeri.Fabric"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

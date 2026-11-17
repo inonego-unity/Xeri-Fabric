@@ -4,7 +4,7 @@
 
 # 설명
 RecordPersistence의 Record 읽기·쓰기, 기존 IO Mapping 조합, 유효성 검증 및 ReleaseHandle 수명과 비동기 취소를 검증한다.
-Document/Save 전용 Metadata·Session·Slot은 이 테스트의 공통 계약에 포함되지 않는다.
+Document/Save 전용 Metadata·Session·SaveKey는 이 테스트의 공통 계약에 포함되지 않는다.
 
 # 테스트 구성
  P: Persistence - 동기·비동기 검증과 ReleaseHandle 수명

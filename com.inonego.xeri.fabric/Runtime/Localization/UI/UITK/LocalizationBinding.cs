@@ -28,15 +28,17 @@ namespace inonego.Xeri.Localization
 
     #region 메서드
 
-        // ----------------------------------------------------------------------------------
+        // --------------------------------------------------------------------------------
         /// <summary>
         /// <br/> VisualElement 의 텍스트를 LocalizedString 에 바인딩한다.
-        /// <br/> Localization.OnLangCodeChange 자동 구독, DetachFromPanelEvent 시 자동 해제.
+        /// <br/> Localization.OnLangCodeChange 자동 구독, DetachFromPanelEvent 시 자동
+        /// <br/> 해제.
         /// <br/> 주의: element 가 panel 에 attach 된 적이 없으면 자동 해제 콜백이 발생하지 않아
-        /// <br/> 정적 이벤트가 클로저를 강참조해 누수 가능. 호출자는 UIDocument rootVisualElement
+        /// <br/> 정적 이벤트가 클로저를 강참조해 누수 가능. 호출자는 UIDocument
+        /// <br/> rootVisualElement
         /// <br/> 트리에 element 가 포함됨을 보장할 것.
         /// </summary>
-        // ----------------------------------------------------------------------------------
+        // --------------------------------------------------------------------------------
         public static void BindLocalized(this VisualElement element, ILocalizedString localized)
         {
             if (element == null) return;
@@ -49,10 +51,13 @@ namespace inonego.Xeri.Localization
             Localization.OnCurrentLangCodeChange += Refresh;
 
             // panel 이탈 시 자동 구독 해제 — 메모리 누수 방지.
-            element.RegisterCallback<DetachFromPanelEvent>(_ =>
-            {
-                Localization.OnCurrentLangCodeChange -= Refresh;
-            });
+            element.RegisterCallback<DetachFromPanelEvent>
+            (
+                _ =>
+                {
+                    Localization.OnCurrentLangCodeChange -= Refresh;
+                }
+            );
         }
 
     #endregion
@@ -70,9 +75,9 @@ namespace inonego.Xeri.Localization
 
             switch (element)
             {
-                case Label label:        label.text  = text; break;
-                case Button button:      button.text = text; break;
-                case TextField field:    field.value = text; break;
+                case Label label: label.text = text; break;
+                case Button button: button.text = text; break;
+                case TextField field: field.value = text; break;
                 // 그 외 — 텍스트 속성이 없는 element 는 무시.
             }
         }

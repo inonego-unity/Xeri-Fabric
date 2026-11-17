@@ -20,6 +20,8 @@ using NUnit.Framework;
 
 namespace inonego.Xeri.TEST._Localization
 {
+    using inonego;
+    using inonego.Xeri;
     using inonego.Xeri.Localization;
 
     // ============================================================
@@ -129,7 +131,7 @@ namespace inonego.Xeri.TEST._Localization
         public void TEST_Localization_LangCode_변경시_Storage_Save_호출()
         {
             var storage = new InMemoryLocaleStorage("ko");
-            var loc     = new Localization(storage);
+            var loc = new Localization(storage);
             Singleton<Localization>.Register(loc);
 
             loc.LangCode = "en";

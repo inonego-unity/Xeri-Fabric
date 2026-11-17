@@ -9,17 +9,20 @@ TextKey 변경은 현재 element만 갱신하고 LangCode 전체 변경은 ILoca
 
 using System;
 
-using inonego.Xeri.Data;
-
+using UnityEngine;
 using UnityEngine.UIElements;
+
+using inonego;
+using inonego.Xeri;
+using inonego.Xeri.Data;
 
 namespace inonego.Xeri.Localization
 {
-    // ============================================================
+    // ================================================================================
     /// <summary>
     /// LocalizedStringRow Key를 현재 locale 문자열로 표시하는 UI Toolkit Label.
     /// </summary>
-    // ============================================================
+    // ================================================================================
     [UxmlElement]
     public partial class LocalizedLabel : Label, ILocalizedUI
     {

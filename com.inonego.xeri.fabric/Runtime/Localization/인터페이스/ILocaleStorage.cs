@@ -52,6 +52,11 @@ namespace inonego.Xeri.Localization
 
     #region 생성자
 
+        // ----------------------------------------------------------------------
+        /// <summary>
+        /// PlayerPrefsLocaleStorage 인스턴스의 초기 상태와 의존성을 설정합니다.
+        /// </summary>
+        // ----------------------------------------------------------------------
         public PlayerPrefsLocaleStorage(string prefsKey = DEFAULT_KEY)
         {
             this.prefsKey = prefsKey;
@@ -102,6 +107,11 @@ namespace inonego.Xeri.Localization
 
     #region 생성자
 
+        // ------------------------------------------------------------
+        /// <summary>
+        /// InMemoryLocaleStorage 인스턴스의 초기 상태와 의존성을 설정합니다.
+        /// </summary>
+        // ------------------------------------------------------------
         public InMemoryLocaleStorage(string initial = null)
         {
             stored = initial;
@@ -111,9 +121,22 @@ namespace inonego.Xeri.Localization
 
     #region 메서드
 
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 저장된 설정 또는 데이터를 읽습니다.
+        /// </summary>
+        // ------------------------------------------------------------
         public string Load() => stored;
 
-        public void Save(string langCode) => stored = langCode;
+        // ------------------------------------------------------------
+        /// <summary>
+        /// 현재 설정 또는 데이터를 기록합니다.
+        /// </summary>
+        // ------------------------------------------------------------
+        public void Save(string langCode)
+        {
+            stored = langCode;
+        }
 
     #endregion
 

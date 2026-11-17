@@ -4,7 +4,7 @@
 
 # 설명
 영속 기록의 종류와 데이터 구조 버전을 조회하는 공통 Metadata 계약.
-Document 이름, Save Slot/시간 및 물리 FormatVersion은 도메인별 Metadata에 남긴다.
+Document 이름, SaveKey/저장 시각 및 물리 FormatVersion은 도메인별 Metadata에 남긴다.
 ========================================================================= BLOCK_HEADER_END */
 
 namespace inonego.Xeri.Persistence

@@ -22,6 +22,12 @@ using UnityEngine;
 
 namespace inonego.Xeri.Localization
 {
+
+    // ============================================================
+    /// <summary>
+    /// 언어 코드 변경 알림을 전달하는 대리자입니다.
+    /// </summary>
+    // ============================================================
     public delegate void LangCodeChangeEventHandler(string code);
 
     // ============================================================
@@ -88,16 +94,19 @@ namespace inonego.Xeri.Localization
 
     #region 메서드
 
-        // ----------------------------------------------------------------------
+        // --------------------------------------------------------------------------------
         /// <summary>
         /// <br/> LangCode 를 변경한다. 변경 시 영속화 + OnLangCodeChange 발생 +
         /// <br/> ILocalizedUI.ReloadLocalizedUIAll() 자동 호출.
         /// <br/> 핸들러 안에서 LangCode 재설정은 재진입 가드로 무시되며 경고 로그를 남긴다.
         /// </summary>
-        // ----------------------------------------------------------------------
+        // --------------------------------------------------------------------------------
         private void SetLangCode(string code)
         {
-            if (code == null) throw new ArgumentNullException(nameof(code));
+            if (code == null)
+            {
+                throw new ArgumentNullException(nameof(code));
+            }
 
             if (langCode == code) return;
 
@@ -147,7 +156,7 @@ namespace inonego.Xeri.Localization
         // ------------------------------------------------------------
         public static event LangCodeChangeEventHandler OnCurrentLangCodeChange
         {
-            add    => Current.OnLangCodeChange += value;
+            add => Current.OnLangCodeChange += value;
             remove => Current.OnLangCodeChange -= value;
         }
 
@@ -157,7 +166,8 @@ namespace inonego.Xeri.Localization
 
         // --------------------------------------------------------------------------------
         /// <summary>
-        /// <br/> Unity 첫 부트 단계에 default 슬롯 미등록 시 PlayerPrefs 기반 인스턴스를 자동 등록.
+        /// <br/> Unity 첫 부트 단계에 default 슬롯 미등록 시 PlayerPrefs 기반 인스턴스를 자동
+        /// <br/> 등록.
         /// <br/> 테스트 환경에서는 Clear() + Register() 로 덮어써 격리할 수 있다.
         /// </summary>
         // --------------------------------------------------------------------------------

@@ -25,6 +25,8 @@ using NUnit.Framework;
 
 namespace inonego.Xeri.TEST._LocalizedUI
 {
+    using inonego;
+    using inonego.Xeri;
     using inonego.Xeri.Localization;
 
     // ============================================================
@@ -37,14 +39,14 @@ namespace inonego.Xeri.TEST._LocalizedUI
 
     #region 헬퍼
 
-        // ============================================================
+        // ======================================================================
         /// <summary>
         /// 테스트용 ILocalizedUI 구현 — Reload 호출 횟수와 마지막 코드를 기록.
         /// </summary>
-        // ============================================================
+        // ======================================================================
         private class TestLocalizedUI : MonoBehaviour, ILocalizedUI
         {
-            public int    ReloadCount      { get; private set; }
+            public int ReloadCount { get; private set; }
             public string LastCodeAtReload { get; private set; }
 
             public void ReloadLocalizedUI()
@@ -61,7 +63,7 @@ namespace inonego.Xeri.TEST._LocalizedUI
         // ============================================================
         private class TestLocalizedElement : VisualElement, ILocalizedUI
         {
-            public int    ReloadCount      { get; private set; }
+            public int ReloadCount { get; private set; }
             public string LastCodeAtReload { get; private set; }
 
             public void ReloadLocalizedUI()
@@ -92,14 +94,22 @@ namespace inonego.Xeri.TEST._LocalizedUI
         {
             foreach (var go in spawned)
             {
-                if (go != null) UnityEngine.Object.DestroyImmediate(go);
+                if (go != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(go);
+                }
             }
+
             spawned.Clear();
 
             foreach (var settings in panelSettings)
             {
-                if (settings != null) UnityEngine.Object.DestroyImmediate(settings);
+                if (settings != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(settings);
+                }
             }
+
             panelSettings.Clear();
 
             Singleton<Localization>.Clear();

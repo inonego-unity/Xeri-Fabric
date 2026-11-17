@@ -53,6 +53,11 @@ namespace inonego.Xeri.Localization
 
     #region 생성자
 
+        // ------------------------------------------------------------
+        /// <summary>
+        /// LocalizedDataSource 인스턴스의 초기 상태와 의존성을 설정합니다.
+        /// </summary>
+        // ------------------------------------------------------------
         public LocalizedDataSource(ILocalizedString source)
         {
             this.source = source;

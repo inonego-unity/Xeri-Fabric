@@ -4,10 +4,10 @@
 
 # 설명
 영속 기록의 종류와 계약 버전을 식별하고 실제 기록이 지원 계약과 일치하는지 검증한다.
-Document의 TypeID/Version과 미래 Save의 SchemaID/Version을 도메인별로 매핑할 수 있다.
+Document의 TypeID/Version과 Save의 SchemaID/Version을 도메인별로 매핑할 수 있다.
 
 # 특이사항
-파일 Envelope의 물리적 Format Version, 문서 표시 이름, Save Slot, 저장 시각은 포함하지 않는다.
+파일 Envelope의 물리적 Format Version, 문서 표시 이름, SaveKey, 저장 시각은 포함하지 않는다.
 Version은 단순 문자열 계약이며 Migration·범위 비교·자동 버전 승격을 제공하지 않는다.
 ========================================================================= BLOCK_HEADER_END */
 

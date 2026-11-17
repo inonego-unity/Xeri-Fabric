@@ -15,13 +15,15 @@ using UnityEngine;
 
 namespace inonego.Xeri.Data
 {
+    using inonego;
+    using inonego.Xeri;
     using inonego.Xeri.Serializable;
 
-    // ================================================================================
+    // ======================================================================
     /// <summary>
     /// ScriptableObject 기반 읽기/쓰기 Table asset의 공통 동작을 구현한다.
     /// </summary>
-    // ================================================================================
+    // ======================================================================
     public abstract class TableAsset<TTableValue> : ScriptableObject, ITable<TTableValue>
     where TTableValue : class, ITableValue
     {
@@ -116,11 +118,11 @@ namespace inonego.Xeri.Data
         // ------------------------------------------------------------
         ITableValue IReadOnlyTable.this[string key] => this[key];
 
-        // ----------------------------------------------------------------------
+        // ------------------------------------------------------------
         /// <summary>
         /// 비제네릭 읽기 전용 계약의 Key와 row 열거자를 반환한다.
         /// </summary>
-        // ----------------------------------------------------------------------
+        // ------------------------------------------------------------
         IEnumerator<KeyValuePair<string, ITableValue>> IReadOnlyTable.GetEnumerator()
         {
             foreach (var (key, value) in Dictionary)
@@ -248,15 +250,15 @@ namespace inonego.Xeri.Data
 
     #region 필드
 
-        [SerializeField]
-        private XDictionary_VV<string, TTableValue> dictionary = new();
-
         // ------------------------------------------------------------
         /// <summary>
         /// 값 직렬화 Dictionary를 반환한다.
         /// </summary>
         // ------------------------------------------------------------
         public override Dictionary<string, TTableValue> Dictionary => dictionary;
+
+        [SerializeField]
+        private XDictionary_VV<string, TTableValue> dictionary = new();
 
     #endregion
 
@@ -273,15 +275,15 @@ namespace inonego.Xeri.Data
 
     #region 필드
 
-        [SerializeField]
-        private XDictionary_VR<string, TTableValue> dictionary = new();
-
         // ------------------------------------------------------------
         /// <summary>
         /// 참조 직렬화 Dictionary를 반환한다.
         /// </summary>
         // ------------------------------------------------------------
         public override Dictionary<string, TTableValue> Dictionary => dictionary;
+
+        [SerializeField]
+        private XDictionary_VR<string, TTableValue> dictionary = new();
 
     #endregion
 

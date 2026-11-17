@@ -14,6 +14,8 @@ using NUnit.Framework;
 
 namespace inonego.Xeri.TEST._LocaleStorage
 {
+    using inonego;
+    using inonego.Xeri;
     using inonego.Xeri.Localization;
 
     // ============================================================

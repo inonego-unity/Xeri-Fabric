@@ -1,6 +1,6 @@
 /* BLOCK_HEADER_BEGIN =======================================================================
 파일명 : ILocalizedUI.cs
-수정일 : 2026-09-02
+수정일 : 2026-10-29
 
 # 설명
 다국어 지원 UI의 갱신 계약과 일괄 reload 진입점을 제공한다.
@@ -12,6 +12,8 @@ LangCode 변경 시 현재 로드된 MonoBehaviour ILocalizedUI와 UIDocument Vi
 UGUI와 UITK는 같은 ILocalizedUI 계약을 사용하고 backend별 hierarchy 탐색 방식만 다르게 적용한다.
 ========================================================================= BLOCK_HEADER_END */
 
+using System;
+using System.Collections;
 using System.Collections.Generic;
 
 using UnityEngine;
@@ -37,7 +39,8 @@ namespace inonego.Xeri.Localization
         /// <summary>
         /// <br/> 현재 로드된 GameObject hierarchy와 UIDocument Visual Tree를 순회해
         /// <br/> ILocalizedUI 구현체에 ReloadLocalizedUI를 호출한다.
-        /// <br/> root가 null이면 일반 Scene과 DontDestroyOnLoad의 모든 Runtime MonoBehaviour를 대상으로 한다.
+        /// <br/> root가 null이면 일반 Scene과 DontDestroyOnLoad의 모든 Runtime
+        /// <br/> MonoBehaviour를 대상으로 한다.
         /// </summary>
         // --------------------------------------------------------------------------------
         public static void ReloadLocalizedUIAll
@@ -50,9 +53,10 @@ namespace inonego.Xeri.Localization
 
             if (root == null)
             {
-                var monoBehaviours = Object.FindObjectsByType<MonoBehaviour>
+                var monoBehaviours = UnityEngine.Object.FindObjectsByType<MonoBehaviour>
                 (
-                    findObjectsInactive
+                    findObjectsInactive,
+                    FindObjectsSortMode.None
                 );
 
                 ReloadLocalizedUIAll(monoBehaviours, visitedUITKElements);
@@ -91,11 +95,11 @@ namespace inonego.Xeri.Localization
             }
         }
 
-        // ----------------------------------------------------------------------
+        // --------------------------------------------------------------------------------
         /// <summary>
         /// VisualElement hierarchy를 순회하며 ILocalizedUI 구현체를 한 번씩 갱신한다.
         /// </summary>
-        // ----------------------------------------------------------------------
+        // --------------------------------------------------------------------------------
         private static void ReloadLocalizedUIAll
         (
             VisualElement element,

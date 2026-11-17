@@ -11,6 +11,8 @@ using System;
 
 using UnityEngine;
 
+using inonego;
+using inonego.Xeri;
 using inonego.Xeri.Data;
 
 namespace inonego.Xeri.Localization

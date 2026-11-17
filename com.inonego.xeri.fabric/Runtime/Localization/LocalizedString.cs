@@ -15,6 +15,8 @@ using System;
 
 namespace inonego.Xeri.Localization
 {
+    using inonego;
+    using inonego.Xeri;
     using inonego.Xeri.Serializable;
 
     // ============================================================
@@ -28,12 +30,12 @@ namespace inonego.Xeri.Localization
 
     #region 인덱서
 
-        // ------------------------------------------------------------
+        // ----------------------------------------------------------------------
         /// <summary>
         /// <br/> 언어 코드로 텍스트 조회.
         /// <br/> 미등록 키는 빈 문자열 반환 (Dictionary 기본 throw 동작 대체).
         /// </summary>
-        // ------------------------------------------------------------
+        // ----------------------------------------------------------------------
         public new string this[string code]
         {
             get => code != null && TryGetValue(code, out var value) ? value : string.Empty;

@@ -17,6 +17,8 @@ using NUnit.Framework;
 
 namespace inonego.Xeri.TEST._LocalizedString
 {
+    using inonego;
+    using inonego.Xeri;
     using inonego.Xeri.Localization;
 
     // ============================================================
@@ -38,7 +40,7 @@ namespace inonego.Xeri.TEST._LocalizedString
                 ["en"] = "Hello",
             };
 
-            Assert.AreEqual("안녕",  loc["ko"]);
+            Assert.AreEqual("안녕", loc["ko"]);
             Assert.AreEqual("Hello", loc["en"]);
         }
 
@@ -70,7 +72,7 @@ namespace inonego.Xeri.TEST._LocalizedString
                 ["ko"] = "안녕",
             };
 
-            Assert.AreEqual("안녕",       loc["ko"]);
+            Assert.AreEqual("안녕", loc["ko"]);
             Assert.AreEqual(string.Empty, loc["missing"]);
         }
 
@@ -94,7 +96,10 @@ namespace inonego.Xeri.TEST._LocalizedString
         [Test]
         public void TEST_LocalizedString_ToLocalized_null_code()
         {
-            var loc = new LocalizedString { ["ko"] = "안녕" };
+            var loc = new LocalizedString
+            {
+                ["ko"] = "안녕"
+            };
 
             Assert.AreEqual(string.Empty, loc.ToLocalized(null));
         }

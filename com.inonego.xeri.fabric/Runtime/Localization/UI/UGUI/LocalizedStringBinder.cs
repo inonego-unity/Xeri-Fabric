@@ -49,6 +49,11 @@ namespace inonego.Xeri.Localization
         [TextArea(2, 4)]
         public string Fallback;
 
+        // ------------------------------------------------------------
+        /// <summary>
+        /// LocalizedString 설정 또는 결과 정보를 제공합니다.
+        /// </summary>
+        // ------------------------------------------------------------
         public ILocalizedString LocalizedString
         {
             get => localizedString;

@@ -5,7 +5,7 @@
 # 설명
 타입이 지정된 영속 기록의 읽기/쓰기 경계에서 도메인 검증과 원본 IO ReleaseHandle 회수를 수행한다.
 역직렬화와 타입 변환은 주입받은 기존 IO reader/writer의 Mapping에 맡긴다.
-Document·Save의 Metadata, Session, Slot과 파일 위치 정책은 이 클래스가 소유하지 않는다.
+Document·Save의 Metadata, Session, SaveKey와 파일 위치 정책은 이 클래스가 소유하지 않는다.
 
 # 주의
 복원된 기록은 원본 Reader ReleaseHandle에 의존하지 않는 독립 데이터여야 한다.

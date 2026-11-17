@@ -8,6 +8,7 @@ XML 테이블 식별 이름을 선언하는 XMLTableNameAttribute를 함께 제�
 ========================================================================= BLOCK_HEADER_END */
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 
 using UnityEngine;
@@ -50,12 +51,12 @@ namespace inonego.Xeri.Data
 
     }
 
-    // ========================================================================
+    // ======================================================================
     /// <summary>
     /// XML 직렬화 목록과 Dictionary를 동기화하는 데이터 테이블 기반 클래스.
     /// </summary>
     /// <typeparam name="TTableValue">테이블 값 타입.</typeparam>
-    // ========================================================================
+    // ======================================================================
     [Serializable]
     public abstract class XMLTable<TTableValue> : Table<TTableValue>, ISerializationCallbackReceiver
     where TTableValue : class, ITableValue
